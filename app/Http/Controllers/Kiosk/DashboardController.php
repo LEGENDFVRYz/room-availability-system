@@ -10,6 +10,6 @@ class DashboardController extends Controller
 {
     public function index(): Response
     {
-        return Inertia::render('Dashboard', ['role' => 'kiosk']);
+        return Inertia::render('Kiosk/dashboard');
     }
 }

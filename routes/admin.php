@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ManageController;
+use App\Http\Controllers\Admin\ScheduleController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -25,6 +26,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified'])->group(
     Route::post('/manage/rooms',           [ManageController::class, 'storeRoom'])->name('manage.rooms.store');
     Route::patch('/manage/rooms/{room}',   [ManageController::class, 'updateRoom'])->name('manage.rooms.update');
     Route::delete('/manage/rooms/{room}',  [ManageController::class, 'deleteRoom'])->name('manage.rooms.delete');
+
+    # Schedules
+    Route::get('/schedules', [ScheduleController::class, 'index'])->name('schedules');
 
     # Manage — Config
     Route::get('/manage/configs',                        [ManageController::class, 'configs'])->name('manage.configs');

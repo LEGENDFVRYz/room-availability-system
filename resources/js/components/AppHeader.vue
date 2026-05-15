@@ -28,16 +28,19 @@ const inKioskDomain = computed(() => page.url.startsWith('/kiosk'));
 const isAdmin = computed(() => (page.props.auth?.user ? true : false));
 
 const isActiveNavItem = (item: NavItem): boolean => {
-    const url = page.url;
-    if (item.href.startsWith('/admin/dashboard')) {
-        return url === '/admin' || url === '/admin/' || url.startsWith('/admin/dashboard');
+    const url = page.url.replace(/\/$/, '');
+    const base = item.href.replace(/\/$/, '');
+
+    if (base === '/admin/dashboard') {
+        return url === '/admin' || url.startsWith('/admin/dashboard');
     }
-    return url === item.href || url.startsWith(item.href);
+    return url === base || url.startsWith(base + '/');
 };
 
 const adminNavItems: NavItem[] = [
     { title: 'Dashboard', href: '/admin/dashboard/', icon: LayoutDashboard },
     { title: 'Manages', href: '/admin/manage/', icon: Settings2 },
+    { title: 'Schedules', href: '/admin/schedules', icon: CalendarDays },
     { title: 'Records', href: '#', icon: ClipboardList },
 ];
 
@@ -53,6 +56,7 @@ const navItems = computed<NavItem[]>(() => {
     return [];
 });
 </script>
+
 
 <template>
     <div>

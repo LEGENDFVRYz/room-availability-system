@@ -21,11 +21,17 @@ export interface NavItem {
     isActive?: boolean;
 }
 
+export interface Flash {
+    success: string | null;
+    error: string | null;
+}
+
 export interface SharedData {
     [key: string]: unknown;
     name: string;
     quote: { message: string; author: string };
     auth: Auth;
+    flash: Flash;
     ziggy: {
         location: string;
         url: string;

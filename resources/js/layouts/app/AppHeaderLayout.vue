@@ -2,6 +2,7 @@
 import AppContent from '@/components/AppContent.vue';
 import AppHeader from '@/components/AppHeader.vue';
 import AppShell from '@/components/AppShell.vue';
+import ToastNotification from '@/components/ToastNotification.vue';
 import type { BreadcrumbItemType, PageHeader } from '@/types';
 
 interface Props {
@@ -40,5 +41,6 @@ withDefaults(defineProps<Props>(), {
             CPE Room Availability &amp; Scheduling System
         </footer>
 
+        <ToastNotification />
     </AppShell>
 </template>

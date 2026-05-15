@@ -8,7 +8,7 @@ import UserMenuContent from '@/components/UserMenuContent.vue';
 import { getInitials } from '@/composables/useInitials';
 import type { BreadcrumbItem, NavItem, SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { LayoutGrid, Menu } from 'lucide-vue-next';
+import { CalendarDays, ClipboardList, LayoutDashboard, Megaphone, Menu, Settings2 } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 interface Props {
@@ -22,15 +22,30 @@ const props = withDefaults(defineProps<Props>(), {
 const page = usePage<SharedData>();
 const auth = computed(() => page.props.auth);
 
+const inAdminDomain = computed(() => page.url.startsWith('/admin'));
+const inKioskDomain = computed(() => page.url.startsWith('/kiosk'));
+
+const isAdmin = computed(() => (page.props.auth?.user ? true : false));
+
 const isCurrentRoute = (url: string) => page.url === url;
 
-const mainNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: '/dashboard',
-        icon: LayoutGrid,
-    },
+const adminNavItems: NavItem[] = [
+    { title: 'Dashboard', href: '#', icon: LayoutDashboard },
+    { title: 'Manage', href: '#', icon: Settings2 },
+    { title: 'Logs', href: '#', icon: ClipboardList },
 ];
+
+const kioskNavItems: NavItem[] = [
+    { title: 'Dashboard', href: '#', icon: LayoutDashboard },
+    { title: 'Schedules', href: '#', icon: CalendarDays },
+    { title: 'Announcements', href: '#', icon: Megaphone },
+];
+
+const navItems = computed<NavItem[]>(() => {
+    if (inAdminDomain.value) return adminNavItems;
+    if (inKioskDomain.value) return kioskNavItems;
+    return [];
+});
 </script>
 
 <template>
@@ -46,7 +61,7 @@ const mainNavItems: NavItem[] = [
         <!-- Main Nav -->
         <nav class="sticky top-0 z-[100] flex h-[60px] items-center justify-between border-b-[3px] border-pup-gold bg-pup-maroon px-6">
             <!-- Brand -->
-            <Link :href="route('dashboard')" class="flex shrink-0 items-center gap-3">
+            <Link href="#" class="flex shrink-0 items-center gap-3">
                 <div
                     class="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full border-2 border-pup-gold bg-pup-maroon-deep"
                 >
@@ -58,26 +73,26 @@ const mainNavItems: NavItem[] = [
                 </div>
             </Link>
 
-            <!-- Desktop Nav Links -->
-            <div class="hidden items-center gap-1 lg:flex">
-                <Link
-                    v-for="item in mainNavItems"
-                    :key="item.title"
-                    :href="item.href"
-                    class="flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-[13px] font-medium transition-all duration-150"
-                    :class="
-                        isCurrentRoute(item.href)
-                            ? 'bg-pup-gold text-pup-maroon-deep'
-                            : 'text-white/75 hover:bg-white/10 hover:text-white'
-                    "
-                >
-                    <component v-if="item.icon" :is="item.icon" class="h-4 w-4" />
-                    {{ item.title }}
-                </Link>
-            </div>
+            <!-- Right Side: Nav Links + Avatar -->
+            <div class="flex items-center gap-1">
+                <!-- Desktop Nav Links -->
+                <div class="hidden items-center gap-1 lg:flex">
+                    <Link
+                        v-for="item in navItems"
+                        :key="item.title"
+                        :href="item.href"
+                        class="flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-[13px] font-medium transition-all duration-150"
+                        :class="
+                            isCurrentRoute(item.href)
+                                ? 'bg-pup-gold text-pup-maroon-deep'
+                                : 'text-white/75 hover:bg-white/10 hover:text-white'
+                        "
+                    >
+                        <component v-if="item.icon" :is="item.icon" class="h-4 w-4" />
+                        {{ item.title }}
+                    </Link>
+                </div>
 
-            <!-- Right Side -->
-            <div class="flex items-center gap-2">
                 <!-- Mobile Menu -->
                 <div class="lg:hidden">
                     <Sheet>
@@ -102,12 +117,14 @@ const mainNavItems: NavItem[] = [
                                 </div>
                                 <div class="text-left">
                                     <div class="text-sm font-semibold text-white">CPE Room System</div>
-                                    <div class="text-[11px] text-pup-gold-light">Admin Panel</div>
+                                    <div class="text-[11px] text-pup-gold-light">
+                                        {{ inAdminDomain ? 'Admin Panel' : 'Kiosk Display' }}
+                                    </div>
                                 </div>
                             </SheetHeader>
                             <nav class="flex flex-col gap-1 p-4">
                                 <Link
-                                    v-for="item in mainNavItems"
+                                    v-for="item in navItems"
                                     :key="item.title"
                                     :href="item.href"
                                     class="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-all duration-150"
@@ -125,8 +142,8 @@ const mainNavItems: NavItem[] = [
                     </Sheet>
                 </div>
 
-                <!-- User Dropdown -->
-                <DropdownMenu>
+                <!-- User Dropdown (Admin only) -->
+                <DropdownMenu v-if="isAdmin">
                     <DropdownMenuTrigger :as-child="true">
                         <Button
                             variant="ghost"

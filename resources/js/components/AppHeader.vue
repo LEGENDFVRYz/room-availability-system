@@ -27,11 +27,17 @@ const inKioskDomain = computed(() => page.url.startsWith('/kiosk'));
 
 const isAdmin = computed(() => (page.props.auth?.user ? true : false));
 
-const isCurrentRoute = (url: string) => page.url === url;
+const isActiveNavItem = (item: NavItem): boolean => {
+    const url = page.url;
+    if (item.href.startsWith('/admin/dashboard')) {
+        return url === '/admin' || url === '/admin/' || url.startsWith('/admin/dashboard');
+    }
+    return url === item.href || url.startsWith(item.href);
+};
 
 const adminNavItems: NavItem[] = [
-    { title: 'Dashboard', href: '#', icon: LayoutDashboard },
-    { title: 'Manages', href: '#', icon: Settings2 },
+    { title: 'Dashboard', href: '/admin/dashboard/', icon: LayoutDashboard },
+    { title: 'Manages', href: '/admin/manage/', icon: Settings2 },
     { title: 'Records', href: '#', icon: ClipboardList },
 ];
 
@@ -83,7 +89,7 @@ const navItems = computed<NavItem[]>(() => {
                         :href="item.href"
                         class="flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-[13px] font-medium transition-all duration-150"
                         :class="
-                            isCurrentRoute(item.href)
+                            isActiveNavItem(item)
                                 ? 'bg-pup-gold text-pup-maroon-deep'
                                 : 'text-white/75 hover:bg-white/10 hover:text-white'
                         "
@@ -129,7 +135,7 @@ const navItems = computed<NavItem[]>(() => {
                                     :href="item.href"
                                     class="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-all duration-150"
                                     :class="
-                                        isCurrentRoute(item.href)
+                                        isActiveNavItem(item)
                                             ? 'bg-pup-gold text-pup-maroon-deep'
                                             : 'text-white/75 hover:bg-white/10 hover:text-white'
                                     "

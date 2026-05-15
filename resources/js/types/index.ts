@@ -9,6 +9,11 @@ export interface BreadcrumbItem {
     href: string;
 }
 
+export interface PageHeader {
+    title: string;
+    desc?: string;
+}
+
 export interface NavItem {
     title: string;
     href: string;

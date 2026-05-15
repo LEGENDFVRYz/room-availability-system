@@ -31,8 +31,8 @@ const isCurrentRoute = (url: string) => page.url === url;
 
 const adminNavItems: NavItem[] = [
     { title: 'Dashboard', href: '#', icon: LayoutDashboard },
-    { title: 'Manage', href: '#', icon: Settings2 },
-    { title: 'Logs', href: '#', icon: ClipboardList },
+    { title: 'Manages', href: '#', icon: Settings2 },
+    { title: 'Records', href: '#', icon: ClipboardList },
 ];
 
 const kioskNavItems: NavItem[] = [

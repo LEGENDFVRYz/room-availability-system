@@ -9,39 +9,39 @@ html {
 
 @layer base {
     :root {
-        /* PUP / CPE Brand Colors */
-        --pup-maroon: #7B1C2E;
-        --pup-maroon-dark: #5A1220;
-        --pup-maroon-deep: #3D0C18;
-        --pup-maroon-light: #9E2D43;
-        --pup-maroon-pale: #F5E8EB;
-        --pup-gold: #F0B429;
-        --pup-gold-dark: #C98D00;
-        --pup-gold-light: #FDE68A;
-        --pup-gold-pale: #FFFBEB;
-        --pup-white: #FFFFFF;
-        --pup-off-white: #FBF8F8;
-        --pup-gray-50: #F9F9F9;
-        --pup-gray-100: #F3F3F3;
-        --pup-gray-200: #E8E8E8;
-        --pup-gray-400: #A0A0A0;
-        --pup-gray-600: #6B6B6B;
-        --pup-gray-800: #2C2C2C;
+        /* PUP / CPE Brand Colors — RGB channels */
+        --pup-maroon:       123 28 46;
+        --pup-maroon-dark:  90 18 32;
+        --pup-maroon-deep:  61 12 24;
+        --pup-maroon-light: 158 45 67;
+        --pup-maroon-pale:  245 232 235;
+        --pup-gold:         240 180 41;
+        --pup-gold-dark:    201 141 0;
+        --pup-gold-light:   253 230 138;
+        --pup-gold-pale:    255 251 235;
+        --pup-white:        255 255 255;
+        --pup-off-white:    251 248 248;
+        --pup-gray-50:      249 249 249;
+        --pup-gray-100:     243 243 243;
+        --pup-gray-200:     232 232 232;
+        --pup-gray-400:     160 160 160;
+        --pup-gray-600:     107 107 107;
+        --pup-gray-800:     44 44 44;
 
-        /* Status Colors */
-        --status-available: #16A34A;
-        --status-available-bg: #DCFCE7;
-        --status-occupied: #DC2626;
-        --status-occupied-bg: #FEE2E2;
-        --status-reserved: #CA8A04;
-        --status-reserved-bg: #FEF9C3;
-        --status-reserved-border: #FDE047;
-        --status-maintenance: #A0A0A0;
-        --status-maintenance-bg: #F3F3F3;
-        --status-notice: #1D4ED8;
-        --status-notice-bg: #DBEAFE;
-        --status-warning: #D97706;
-        --status-warning-bg: #FEF3C7;
+        /* Status Colors — RGB channels */
+        --status-available:        22 163 74;
+        --status-available-bg:     220 252 231;
+        --status-occupied:         220 38 38;
+        --status-occupied-bg:      254 226 226;
+        --status-reserved:         202 138 4;
+        --status-reserved-bg:      254 249 195;
+        --status-reserved-border:  253 224 71;
+        --status-maintenance:      160 160 160;
+        --status-maintenance-bg:   243 243 243;
+        --status-notice:           29 78 216;
+        --status-notice-bg:        219 234 254;
+        --status-warning:          217 119 6;
+        --status-warning-bg:       254 243 199;
 
         /* Shadcn Component Theme — PUP Brand */
         --background: 0 0% 100%;

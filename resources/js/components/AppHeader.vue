@@ -74,7 +74,7 @@ const navItems = computed<NavItem[]>(() => {
             </Link>
 
             <!-- Right Side: Nav Links + Avatar -->
-            <div class="flex items-center gap-1">
+            <div class="flex items-center gap-5">
                 <!-- Desktop Nav Links -->
                 <div class="hidden items-center gap-1 lg:flex">
                     <Link
@@ -148,12 +148,12 @@ const navItems = computed<NavItem[]>(() => {
                         <Button
                             variant="ghost"
                             size="icon"
-                            class="relative size-10 w-auto rounded-full p-1 hover:bg-white/10 focus-within:ring-2 focus-within:ring-pup-gold"
+                            class="h-[38px] w-[38px] rounded-full border-2 border-pup-gold bg-pup-maroon-deep p-0 hover:border-pup-gold-light hover:bg-pup-maroon focus-within:ring-2 focus-within:ring-pup-gold"
                         >
-                            <Avatar class="size-8 overflow-hidden rounded-full">
+                            <Avatar class="size-full overflow-hidden rounded-full bg-pup-maroon-deep">
                                 <AvatarImage :src="auth.user.avatar ?? ''" :alt="auth.user.name" />
                                 <AvatarFallback
-                                    class="rounded-full bg-pup-maroon-deep font-semibold text-pup-gold-light"
+                                    class="rounded-full bg-transparent text-[13px] font-semibold text-pup-gold-light"
                                 >
                                     {{ getInitials(auth.user?.name) }}
                                 </AvatarFallback>

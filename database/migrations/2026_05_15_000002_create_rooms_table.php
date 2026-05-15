@@ -13,7 +13,7 @@ return new class extends Migration
             $table->string('code', 20)->unique();
             $table->string('name', 100);
             $table->string('room_type', 20);
-            $table->string('floor', 20)->nullable();
+            $table->unsignedTinyInteger('floor')->nullable();
             $table->unsignedSmallInteger('capacity')->nullable();
             $table->unsignedSmallInteger('display_order')->default(0);
             $table->boolean('is_active')->default(true);

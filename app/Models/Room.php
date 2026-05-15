@@ -30,6 +30,7 @@ class Room extends Model
     {
         return [
             'room_type'     => RoomType::class,
+            'floor'         => 'integer',
             'capacity'      => 'integer',
             'display_order' => 'integer',
             'is_active'     => 'boolean',

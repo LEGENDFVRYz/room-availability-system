@@ -23,7 +23,7 @@ return new class extends Migration
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
-
+            
             // Used for efficient overlap/conflict queries and status resolution
             $table->index(['room_id', 'academic_term_id', 'day_of_week', 'is_active'], 'idx_schedules_room_term_day_active');
         });

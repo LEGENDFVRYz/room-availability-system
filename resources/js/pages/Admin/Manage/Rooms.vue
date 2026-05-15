@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
+import PillTabs from '@/components/PillTabs.vue';
 import type { BreadcrumbItem, PageHeader } from '@/types';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head } from '@inertiajs/vue3';
 import { Building2, Settings2, Search, Plus, ChevronDown } from 'lucide-vue-next';
 import { ref, computed } from 'vue';
 
@@ -93,23 +94,12 @@ function floorLabel(floor: number) {
 
     <AppLayout :breadcrumbs="breadcrumbs" :pageheader="pageheader">
 
-        <!-- ── Tab switcher ─────────────────────────────────────────────── -->
-        <div class="mb-6 flex items-center gap-2">
-            <Link
-                href="/admin/manage/rooms"
-                class="flex items-center gap-2 rounded-lg border border-pup-maroon bg-pup-maroon px-4 py-2 text-sm font-medium text-white shadow-sm"
-            >
-                <Building2 class="h-4 w-4" />
-                Manage Rooms
-            </Link>
-
-            <Link
-                href="/admin/manage/configs"
-                class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-all hover:border-pup-maroon/40 hover:text-pup-maroon"
-            >
-                <Settings2 class="h-4 w-4" />
-                Manage Config
-            </Link>
+        <!-- Tab switcher -->
+        <div class="mb-6">
+            <PillTabs :tabs="[
+                { label: 'Manage Rooms',  href: '/admin/manage/rooms',   icon: Building2 },
+                { label: 'Manage Config', href: '/admin/manage/configs',  icon: Settings2 },
+            ]" />
         </div>
 
         <!-- Controls row -->

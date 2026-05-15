@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem, PageHeader } from '@/types';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head } from '@inertiajs/vue3';
 import { Building2, Settings2, GraduationCap, Server, Plus } from 'lucide-vue-next';
+import PillTabs from '@/components/PillTabs.vue';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: '/admin/dashboard' },
@@ -28,28 +29,18 @@ const systemInfo = [
 
     <AppLayout :breadcrumbs="breadcrumbs" :pageheader="pageheader">
 
-        <!-- ── Tab switcher ─────────────────────────────────────────────── -->
-        <div class="mb-6 flex items-center gap-2">
-            <Link
-                href="/admin/manage/rooms"
-                class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-all hover:border-pup-maroon/40 hover:text-pup-maroon"
-            >
-                <Building2 class="h-4 w-4" />
-                Manage Rooms
-            </Link>
-
-            <Link
-                href="/admin/manage/configs"
-                class="flex items-center gap-2 rounded-lg border border-pup-maroon bg-pup-maroon px-4 py-2 text-sm font-medium text-white shadow-sm"
-            >
-                <Settings2 class="h-4 w-4" />
-                Manage Config
-            </Link>
+        <!-- Tab switcher -->
+        <div class="mb-6">
+            <PillTabs :tabs="[
+                { label: 'Manage Rooms',  href: '/admin/manage/rooms',   icon: Building2 },
+                { label: 'Manage Config', href: '/admin/manage/configs',  icon: Settings2 },
+            ]" />
         </div>
+        
 
-        <!-- ── Config content ────────────────────────────────────────────── -->
+        <!-- Config content -->
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-
+            
             <!-- Academic Settings card -->
             <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
                 <div class="mb-5 flex items-center gap-3">

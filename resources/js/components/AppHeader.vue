@@ -65,7 +65,7 @@ const navItems = computed<NavItem[]>(() => {
                 <div
                     class="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full border-2 border-pup-gold bg-pup-maroon-deep"
                 >
-                    <AppLogoIcon class="size-[18px] fill-current text-pup-gold-light" />
+                    <AppLogoIcon class="size-[20px] fill-current text-pup-gold" />
                 </div>
                 <div class="hidden sm:block">
                     <div class="text-[15px] font-semibold leading-snug text-white">CPE Room System</div>

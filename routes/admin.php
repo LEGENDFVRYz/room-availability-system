@@ -21,4 +21,5 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified'])->group(
     Route::redirect('/manage', '/admin/manage/rooms')->name('manage');
     Route::get('/manage/rooms',   [ManageController::class, 'rooms'])->name('manage.rooms');
     Route::get('/manage/configs', [ManageController::class, 'configs'])->name('manage.configs');
+    Route::post('/manage/configs/terms/set-current', [ManageController::class, 'setCurrentTerm'])->name('manage.configs.set-current');
 });

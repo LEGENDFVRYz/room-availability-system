@@ -30,5 +30,15 @@ withDefaults(defineProps<Props>(), {
         <AppContent>
             <slot />
         </AppContent>
+
+        <!-- Page Footer -->
+        <footer
+            class="mt-10 border-t-2 border-pup-gold bg-pup-maroon-deep px-6 py-4 text-center text-[11px] text-white/45"
+        >
+            <strong class="font-medium text-pup-gold-light">Polytechnic University of the Philippines - Manila</strong>
+            · College of Engineering · Computer Engineering Department<br>
+            CPE Room Availability &amp; Scheduling System
+        </footer>
+
     </AppShell>
 </template>

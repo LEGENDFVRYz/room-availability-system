@@ -28,7 +28,12 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified'])->group(
     Route::delete('/manage/rooms/{room}',  [ManageController::class, 'deleteRoom'])->name('manage.rooms.delete');
 
     # Schedules
-    Route::get('/schedules', [ScheduleController::class, 'index'])->name('schedules');
+    Route::redirect('/schedules', '/admin/schedules/sections')->name('schedules');
+    Route::get('/schedules/sections',             [ScheduleController::class, 'sections'])->name('schedules.sections');
+    Route::get('/schedules/rooms',                [ScheduleController::class, 'rooms'])->name('schedules.rooms');
+    Route::post('/schedules',                     [ScheduleController::class, 'store'])->name('schedules.store');
+    Route::patch('/schedules/{schedule}',         [ScheduleController::class, 'update'])->name('schedules.update');
+    Route::delete('/schedules/{schedule}',        [ScheduleController::class, 'destroy'])->name('schedules.destroy');
 
     # Manage — Config
     Route::get('/manage/configs',                        [ManageController::class, 'configs'])->name('manage.configs');

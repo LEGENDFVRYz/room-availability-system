@@ -96,6 +96,7 @@ const selectedRoomIds = ref<number[]>([]);
 const selectedType = ref<'all' | DailySlotType>('all');
 const isRoomFilterOpen = ref(false);
 
+// Client-side only clock state.
 const currentDateTime = ref(new Date());
 const lastUpdatedAt = ref(new Date());
 let clockTimer: number | undefined;
@@ -582,8 +583,8 @@ function resetClassForm() {
     classForm.reason = '';
 }
 
-function openClassModal(type: 'special_class' | 'makeup_class') {
-    classModalType.value = type;
+function openClassModal() {
+    classModalType.value = 'special_class';
     resetClassForm();
     showClassModal.value = true;
 }
@@ -699,19 +700,11 @@ onUnmounted(() => {
                 <div class="flex flex-wrap gap-2">
                     <button
                         type="button"
-                        @click="openClassModal('special_class')"
+                        @click="openClassModal"
                         class="inline-flex items-center gap-1.5 rounded-lg border border-pup-maroon/15 bg-white px-3.5 py-2 text-sm font-medium text-pup-maroon shadow-sm transition hover:bg-pup-maroon-pale"
                     >
-                        <Sparkles class="h-4 w-4" />
-                        Special Class
-                    </button>
-                    <button
-                        type="button"
-                        @click="openClassModal('makeup_class')"
-                        class="inline-flex items-center gap-1.5 rounded-lg bg-pup-maroon px-3.5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-pup-maroon-deep"
-                    >
                         <Plus class="h-4 w-4" />
-                        Makeup Class
+                        Request Class
                     </button>
                 </div>
             </div>
@@ -1185,10 +1178,10 @@ onUnmounted(() => {
             <div class="flex items-start justify-between border-b border-gray-200 px-6 py-4">
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-wide text-pup-maroon">Daily operation</p>
-                    <h3 class="mt-1 text-xl font-bold text-gray-900">
-                        {{ classModalType === 'special_class' ? 'Add Special Class' : 'Add Makeup Class' }}
-                    </h3>
-                    <p class="mt-1 text-sm text-gray-500">Create a one-date class entry for {{ selectedDateLabel }}.</p>
+                    <h3 class="mt-1 text-xl font-bold text-gray-900">Request Class</h3>
+                    <p class="mt-1 text-sm text-gray-500">
+                        Create a one-date class entry for {{ selectedDateLabel }} and classify it as a special or makeup class.
+                    </p>
                 </div>
                 <button @click="closeClassModal" class="rounded-full p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700">
                     <X class="h-5 w-5" />
@@ -1196,6 +1189,43 @@ onUnmounted(() => {
             </div>
 
             <div class="grid gap-4 px-6 py-5 sm:grid-cols-2">
+                <div class="sm:col-span-2">
+                    <p class="text-sm font-semibold text-gray-700">Request type</p>
+                    <div class="mt-2 grid gap-3 sm:grid-cols-2">
+                        <button
+                            type="button"
+                            @click="classModalType = 'special_class'"
+                            :class="[
+                                'rounded-xl border px-4 py-3 text-left transition',
+                                classModalType === 'special_class'
+                                    ? 'border-pup-maroon bg-pup-maroon-pale text-pup-maroon shadow-sm'
+                                    : 'border-gray-200 bg-white text-gray-600 hover:border-pup-maroon/30 hover:bg-pup-maroon-pale/40',
+                            ]"
+                        >
+                            <span class="block text-sm font-bold">Special Class</span>
+                            <span class="mt-1 block text-xs leading-relaxed opacity-80">
+                                One-time class added for the selected date with no regular weekly schedule.
+                            </span>
+                        </button>
+
+                        <button
+                            type="button"
+                            @click="classModalType = 'makeup_class'"
+                            :class="[
+                                'rounded-xl border px-4 py-3 text-left transition',
+                                classModalType === 'makeup_class'
+                                    ? 'border-pup-maroon bg-pup-maroon-pale text-pup-maroon shadow-sm'
+                                    : 'border-gray-200 bg-white text-gray-600 hover:border-pup-maroon/30 hover:bg-pup-maroon-pale/40',
+                            ]"
+                        >
+                            <span class="block text-sm font-bold">Makeup Class</span>
+                            <span class="mt-1 block text-xs leading-relaxed opacity-80">
+                                Replacement class for a missed or adjusted session.
+                            </span>
+                        </button>
+                    </div>
+                </div>
+
                 <label class="flex flex-col gap-1 text-sm font-medium text-gray-600">
                     Room
                     <select v-model="classForm.room_id" class="rounded-lg border-gray-200 text-sm focus:border-pup-maroon focus:ring-pup-maroon">
@@ -1237,7 +1267,7 @@ onUnmounted(() => {
 
                 <label class="flex flex-col gap-1 text-sm font-medium text-gray-600 sm:col-span-2">
                     Reason / note
-                    <textarea v-model="classForm.reason" rows="3" class="rounded-lg border-gray-200 text-sm focus:border-pup-maroon focus:ring-pup-maroon" placeholder="Optional reason for this one-date class" />
+                    <textarea v-model="classForm.reason" rows="3" class="rounded-lg border-gray-200 text-sm focus:border-pup-maroon focus:ring-pup-maroon" :placeholder="classModalType === 'special_class' ? 'Optional reason for this special class' : 'Optional reason for this makeup class'" />
                 </label>
             </div>
 
@@ -1246,7 +1276,7 @@ onUnmounted(() => {
                     Cancel
                 </button>
                 <button @click="saveClassPreview" class="rounded-lg bg-pup-maroon px-4 py-2 text-sm font-semibold text-white hover:bg-pup-maroon-deep">
-                    Save Preview
+                    {{ classModalType === 'special_class' ? 'Save Special Class' : 'Save Makeup Class' }}
                 </button>
             </div>
         </div>

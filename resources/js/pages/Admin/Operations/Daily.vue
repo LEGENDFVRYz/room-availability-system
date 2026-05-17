@@ -2,10 +2,15 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import PillTabs from '@/components/PillTabs.vue';
 import type { BreadcrumbItem, PageHeader } from '@/types';
-import { Head, useForm } from '@inertiajs/vue3';
-import { CalendarDays, School, GraduationCap, Server, Plus, ChevronDown } from 'lucide-vue-next';
+import { Head, usePage } from '@inertiajs/vue3';
+import {
+    AlertCircle, ArrowRightLeft, Ban, CalendarDays, CheckCircle2, Clock3, ChevronDown, Eye, 
+    LayoutGrid, ListFilter, Play, Plus, RefreshCw, School, Sparkles, Table2, X, 
+} from 'lucide-vue-next';
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 
-// Types
+
+// --- Page Types ---
 interface CurrentTerm {
     school_year: string;
     semester_label: string;
@@ -13,40 +18,1237 @@ interface CurrentTerm {
     semester: number;
 }
 
-// Props and template setup
-const props = defineProps<{ currentTerm: CurrentTerm | null }>();
+interface SharedProps {
+    currentTerm?: CurrentTerm | null;
+}
+
+interface Room {
+    id: number;
+    code: string;
+    name: string;
+    type?: string;
+}
+
+type DailySlotSource = 'schedule' | 'exception';
+type DailySlotType = 'regular' | 'cancellation' | 'room_change' | 'special_class' | 'makeup_class';
+type DailySlotStatus = 'scheduled' | 'pending' | 'ongoing' | 'completed' | 'cancelled' | 'auto_cancelled';
+
+interface DailySlot {
+    id: number;
+    schedule_id?: number | null;
+    exception_id?: number | null;
+    room_id: number;
+    original_room_id?: number | null;
+    original_room_code?: string | null;
+    event_date: string;
+    source: DailySlotSource;
+    event_type: DailySlotType;
+    status: DailySlotStatus;
+    subject_code: string;
+    subject_title: string;
+    section: string;
+    instructor_name?: string | null;
+    start_time: string;
+    end_time: string;
+    reason?: string | null;
+}
+
+
+// --- Page Props and Template Setup ---
+interface Props {
+    currentTerm?: CurrentTerm | null;
+    rooms?: Room[];
+    daily_schedules?: DailySlot[];
+    selected_date?: string;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+    rooms: () => [],
+    daily_schedules: () => [],
+    selected_date: '',
+});
+
+const page = usePage<SharedProps>();
+const currentTerm = computed(() => page.props.currentTerm ?? props.currentTerm ?? null);
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Dashboard',       href: '/admin/dashboard' },
-    { title: 'Daily Schedule',  href: '/admin/operations/daily' },
-    { title: 'Room Status',     href: '/admin/operations/room-status' },
+    { title: 'Dashboard', href: '/admin/dashboard' },
+    { title: 'Operations', href: '/admin/operations/daily' },
+    { title: 'Daily Schedule', href: '/admin/operations/daily' },
 ];
 
 const pageheader: PageHeader = {
     title: 'Daily Schedule',
-    desc: 'Manage day-to-day class cancellations, room changes, and special classes.',
+    desc: 'Manage same-day class cancellations, room changes, special classes, and makeup classes.',
 };
 
 const manageTabs = [
-    { label: 'Daily Schedule', href: '/admin/operations/daily',       icon: CalendarDays },
-    { label: 'Room Status',    href: '/admin/operations/room-status', icon: School },
+    { label: 'Daily Schedule', href: '/admin/operations/daily', icon: CalendarDays },
+    { label: 'Room Status', href: '/admin/operations/room-status', icon: School },
 ];
 
 
+// --- Helpers ---
+const todayIso = () => new Date().toISOString().slice(0, 10);
+const selectedDate = ref(props.selected_date || todayIso());
+const viewMode = ref<'room' | 'table'>('room');
+const selectedRoomIds = ref<number[]>([]);
+const selectedType = ref<'all' | DailySlotType>('all');
+const isRoomFilterOpen = ref(false);
+
+const currentDateTime = ref(new Date());
+const lastUpdatedAt = ref(new Date());
+let clockTimer: number | undefined;
+
+const START_HOUR = 7;
+const END_HOUR = 21;
+const HOUR_HEIGHT = 76;
+const GRID_HEIGHT = (END_HOUR - START_HOUR) * HOUR_HEIGHT;
+const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, index) => START_HOUR + index);
+const hourLines = hours.slice(0, -1);
+
+const sampleRooms: Room[] = [
+    { id: 1, code: 'CEA300', name: 'CPE Lecture Room 1', type: 'classroom' },
+    { id: 2, code: 'CEA316', name: 'CPE Laboratory 1', type: 'laboratory' },
+    { id: 3, code: 'CEA315', name: 'CPE Lecture Room 2', type: 'classroom' },
+    { id: 4, code: 'CEA314', name: 'CPE Laboratory 2', type: 'laboratory' },
+    { id: 5, code: 'CEA313', name: 'CPE Lecture Room 3', type: 'classroom' },
+    { id: 6, code: 'CEA312', name: 'CPE Laboratory 3', type: 'laboratory' },
+    { id: 7, code: 'CEA311', name: 'CPE Lecture Room 4', type: 'classroom' },
+    { id: 8, code: 'CEA310', name: 'CPE Lecture Room 5', type: 'classroom' },
+    { id: 9, code: 'CEA413', name: 'CPE Laboratory 4', type: 'laboratory' },
+    { id: 10, code: 'CEA207', name: 'CPE Lecture Room 6', type: 'classroom' },
+];
+
+const createSampleSlots = (date: string): DailySlot[] => [
+    {
+        id: 101,
+        schedule_id: 101,
+        room_id: 1,
+        event_date: date,
+        source: 'schedule',
+        event_type: 'regular',
+        status: 'scheduled',
+        subject_code: 'CMPE 364',
+        subject_title: 'Web and Mobile Systems',
+        section: 'BSCPE 3-6',
+        instructor_name: 'A. Canlas',
+        start_time: '08:00',
+        end_time: '10:30',
+    },
+    {
+        id: 102,
+        schedule_id: 102,
+        exception_id: 202,
+        room_id: 1,
+        event_date: date,
+        source: 'exception',
+        event_type: 'cancellation',
+        status: 'cancelled',
+        subject_code: 'CMPE 361',
+        subject_title: 'Enterprise Networking',
+        section: 'BSCPE 1-IP',
+        instructor_name: 'J. Binuya',
+        start_time: '12:30',
+        end_time: '14:00',
+        reason: 'Instructor unavailable today.',
+    },
+    {
+        id: 103,
+        schedule_id: 103,
+        room_id: 1,
+        event_date: date,
+        source: 'schedule',
+        event_type: 'regular',
+        status: 'scheduled',
+        subject_code: 'CMPE 310',
+        subject_title: 'Computer Networks',
+        section: 'BSCPE 3-4',
+        instructor_name: 'L. Reyes',
+        start_time: '15:00',
+        end_time: '17:30',
+    },
+    {
+        id: 104,
+        schedule_id: 104,
+        room_id: 3,
+        event_date: date,
+        source: 'schedule',
+        event_type: 'regular',
+        status: 'scheduled',
+        subject_code: 'CMPE 311',
+        subject_title: 'Microprocessor',
+        section: 'BSCPE 3-5',
+        instructor_name: 'J. Cansino',
+        start_time: '08:00',
+        end_time: '10:00',
+    },
+    {
+        id: 105,
+        schedule_id: 105,
+        room_id: 3,
+        event_date: date,
+        source: 'schedule',
+        event_type: 'regular',
+        status: 'scheduled',
+        subject_code: 'CMPE 311',
+        subject_title: 'Microprocessor',
+        section: 'BSCPE 3-7',
+        instructor_name: 'J. Cansino',
+        start_time: '10:30',
+        end_time: '13:00',
+    },
+    {
+        id: 106,
+        schedule_id: 106,
+        exception_id: 206,
+        room_id: 3,
+        original_room_id: 7,
+        original_room_code: 'CEA311',
+        event_date: date,
+        source: 'exception',
+        event_type: 'room_change',
+        status: 'pending',
+        subject_code: 'CMPE 011',
+        subject_title: 'Computer Programming',
+        section: 'BSCPE 1-3',
+        instructor_name: 'J. Nicolas',
+        start_time: '14:00',
+        end_time: '16:30',
+        reason: 'Original room unavailable.',
+    },
+    {
+        id: 107,
+        schedule_id: 107,
+        room_id: 4,
+        event_date: date,
+        source: 'schedule',
+        event_type: 'regular',
+        status: 'scheduled',
+        subject_code: 'CMPE 203',
+        subject_title: 'Numerical Methods',
+        section: 'BSCPE 2-6',
+        instructor_name: 'L. Lacatan',
+        start_time: '08:00',
+        end_time: '10:00',
+    },
+    {
+        id: 108,
+        schedule_id: 108,
+        room_id: 4,
+        event_date: date,
+        source: 'schedule',
+        event_type: 'regular',
+        status: 'scheduled',
+        subject_code: 'CMPE 204',
+        subject_title: 'Advanced Math',
+        section: 'BSCPE 2-4',
+        instructor_name: 'J. Rodriguez',
+        start_time: '14:00',
+        end_time: '15:30',
+    },
+    {
+        id: 109,
+        schedule_id: 109,
+        room_id: 4,
+        event_date: date,
+        source: 'schedule',
+        event_type: 'regular',
+        status: 'ongoing',
+        subject_code: 'CMPE 462',
+        subject_title: 'Neural Networks',
+        section: 'BSCPE 4-1',
+        instructor_name: 'M. Malbog',
+        start_time: '15:30',
+        end_time: '17:00',
+    },
+    {
+        id: 110,
+        schedule_id: 110,
+        room_id: 5,
+        event_date: date,
+        source: 'schedule',
+        event_type: 'regular',
+        status: 'scheduled',
+        subject_code: 'CMPE 011',
+        subject_title: 'Computer Programming',
+        section: 'BSCPE 1-1',
+        instructor_name: 'A. Racusa',
+        start_time: '08:00',
+        end_time: '13:00',
+    },
+    {
+        id: 111,
+        schedule_id: 111,
+        room_id: 6,
+        event_date: date,
+        source: 'schedule',
+        event_type: 'regular',
+        status: 'scheduled',
+        subject_code: 'CMPE 310',
+        subject_title: 'Computer Networks',
+        section: 'BSCPE 3-7',
+        instructor_name: 'J. Binuya',
+        start_time: '08:00',
+        end_time: '10:00',
+    },
+    {
+        id: 112,
+        schedule_id: 112,
+        exception_id: 212,
+        room_id: 6,
+        event_date: date,
+        source: 'exception',
+        event_type: 'special_class',
+        status: 'pending',
+        subject_code: 'CMPE 499',
+        subject_title: 'Capstone Consultation',
+        section: 'BSCPE 4-2',
+        instructor_name: 'M. Bautista',
+        start_time: '13:00',
+        end_time: '15:00',
+        reason: 'Special consultation session.',
+    },
+    {
+        id: 113,
+        schedule_id: 113,
+        room_id: 7,
+        event_date: date,
+        source: 'schedule',
+        event_type: 'regular',
+        status: 'scheduled',
+        subject_code: 'CMPE 311',
+        subject_title: 'Microprocessor',
+        section: 'BSCPE 3-3',
+        instructor_name: 'R. Mahaguay',
+        start_time: '08:00',
+        end_time: '10:00',
+    },
+    {
+        id: 114,
+        exception_id: 214,
+        schedule_id: null,
+        room_id: 9,
+        event_date: date,
+        source: 'exception',
+        event_type: 'makeup_class',
+        status: 'pending',
+        subject_code: 'ENSC 411',
+        subject_title: 'Technopreneurship 101',
+        section: 'BSCPE 3-2',
+        instructor_name: 'J. Tena',
+        start_time: '18:00',
+        end_time: '20:00',
+        reason: 'Makeup class for missed session.',
+    },
+];
+
+const rooms = computed<Room[]>(() => (props.rooms.length ? props.rooms : sampleRooms));
+const sourceSlots = computed<DailySlot[]>(() => (props.daily_schedules.length ? props.daily_schedules : createSampleSlots(selectedDate.value)));
+const localSlots = ref<DailySlot[]>([]);
+
+watch(
+    sourceSlots,
+    (slots) => {
+        localSlots.value = slots.map((slot) => ({ ...slot }));
+    },
+    { immediate: true },
+);
+
+const roomMap = computed(() => new Map(rooms.value.map((room) => [room.id, room])));
+
+const roomLabel = (roomId: number) => {
+    const room = roomMap.value.get(roomId);
+    return room ? `${room.code} · ${room.name}` : `Room #${roomId}`;
+};
+
+const roomCode = (roomId: number) => roomMap.value.get(roomId)?.code ?? `Room ${roomId}`;
+
+const selectedRoomLabel = computed(() => {
+    if (selectedRoomIds.value.length === 0) return 'All rooms';
+    if (selectedRoomIds.value.length === 1) return roomCode(selectedRoomIds.value[0]);
+    return `${selectedRoomIds.value.length} rooms selected`;
+});
+
+function toggleRoomSelection(roomId: number) {
+    if (selectedRoomIds.value.includes(roomId)) {
+        selectedRoomIds.value = selectedRoomIds.value.filter((id) => id !== roomId);
+        return;
+    }
+
+    selectedRoomIds.value = [...selectedRoomIds.value, roomId];
+}
+
+function clearRoomSelection() {
+    selectedRoomIds.value = [];
+}
+
+function isRoomSelected(roomId: number) {
+    return selectedRoomIds.value.includes(roomId);
+}
+
+const selectedDateLabel = computed(() => {
+    const date = new Date(`${selectedDate.value}T00:00:00`);
+    return date.toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+    });
+});
+
+const currentTimeLabel = computed(() => {
+    return currentDateTime.value.toLocaleTimeString('en-PH', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+    });
+});
+
+const lastUpdatedLabel = computed(() => {
+    const diffInSeconds = Math.floor(
+        (currentDateTime.value.getTime() - lastUpdatedAt.value.getTime()) / 1000,
+    );
+
+    if (diffInSeconds < 10) return 'Just now';
+    if (diffInSeconds < 60) return `${diffInSeconds} sec ago`;
+
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    if (diffInMinutes < 60) return `${diffInMinutes} min ago`;
+
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    return `${diffInHours} hr${diffInHours > 1 ? 's' : ''} ago`;
+});
+
+function refreshDailyOperations() {
+    currentDateTime.value = new Date();
+    lastUpdatedAt.value = new Date();
+
+    // Backend wiring later:
+    // router.reload({ only: ['daily_schedules', 'rooms'], preserveScroll: true });
+}
+
+const filteredSlots = computed(() => {
+    return localSlots.value
+        .filter((slot) => !slot.event_date || slot.event_date === selectedDate.value)
+        .filter((slot) => selectedRoomIds.value.length === 0 || selectedRoomIds.value.includes(slot.room_id))
+        .filter((slot) => selectedType.value === 'all' || slot.event_type === selectedType.value)
+        .sort((a, b) => a.start_time.localeCompare(b.start_time) || roomCode(a.room_id).localeCompare(roomCode(b.room_id)));
+});
+
+const roomsForGrid = computed(() =>
+    rooms.value
+        .filter((room) => selectedRoomIds.value.length === 0 || selectedRoomIds.value.includes(room.id))
+        .map((room) => ({
+            ...room,
+            slots: filteredSlots.value.filter((slot) => slot.room_id === room.id),
+        })),
+);
+
+const exceptionCount = computed(() => filteredSlots.value.filter((slot) => slot.source === 'exception').length);
+const cancelledCount = computed(() => filteredSlots.value.filter((slot) => ['cancelled', 'auto_cancelled'].includes(slot.status)).length);
+
+const nowMinutes = computed(() => {
+    if (selectedDate.value !== todayIso()) return null;
+
+    const now = currentDateTime.value;
+    return now.getHours() * 60 + now.getMinutes();
+});
+
+function isSlotHappeningNow(slot: DailySlot): boolean {
+    if (nowMinutes.value === null) return false;
+    if (['cancelled', 'auto_cancelled', 'completed'].includes(slot.status)) return false;
+
+    return parseMinutes(slot.start_time) <= nowMinutes.value && nowMinutes.value < parseMinutes(slot.end_time);
+}
+
+const occupiedNowCount = computed(() => filteredSlots.value.filter(isSlotHappeningNow).length);
+const freeRoomsNowCount = computed(() => {
+    const visibleRooms = roomsForGrid.value;
+    const occupiedRoomIds = new Set(filteredSlots.value.filter(isSlotHappeningNow).map((slot) => slot.room_id));
+
+    return visibleRooms.filter((room) => !occupiedRoomIds.has(room.id)).length;
+});
+const upcomingSoonCount = computed(() => {
+    if (nowMinutes.value === null) return 0;
+
+    return filteredSlots.value.filter((slot) => {
+        if (['cancelled', 'auto_cancelled', 'completed', 'ongoing'].includes(slot.status)) return false;
+
+        const start = parseMinutes(slot.start_time);
+        return start >= nowMinutes.value && start <= nowMinutes.value + 30;
+    }).length;
+});
+
+const tableTimeGroups = computed(() => {
+    const groups = new Map<string, DailySlot[]>();
+
+    filteredSlots.value.forEach((slot) => {
+        const key = `${slot.start_time}-${slot.end_time}`;
+        groups.set(key, [...(groups.get(key) ?? []), slot]);
+    });
+
+    return Array.from(groups.entries()).map(([key, slots]) => ({
+        key,
+        label: formatTimeRange(slots[0]),
+        slots,
+    }));
+});
+
+const EVENT_TYPE_LABEL: Record<DailySlotType, string> = {
+    regular: 'Regular',
+    cancellation: 'Cancellation',
+    room_change: 'Room Change',
+    special_class: 'Special Class',
+    makeup_class: 'Makeup Class',
+};
+
+const STATUS_LABEL: Record<DailySlotStatus, string> = {
+    scheduled: 'Scheduled',
+    pending: 'Pending',
+    ongoing: 'Ongoing',
+    completed: 'Completed',
+    cancelled: 'Cancelled',
+    auto_cancelled: 'Auto-cancelled',
+};
+
+const EVENT_CLASS: Record<DailySlotType, string> = {
+    regular: 'border-sky-300 bg-sky-50 text-sky-900',
+    cancellation: 'border-slate-300 bg-slate-100 text-slate-600 opacity-80',
+    room_change: 'border-orange-300 bg-orange-50 text-orange-900',
+    special_class: 'border-emerald-300 bg-emerald-50 text-emerald-900',
+    makeup_class: 'border-violet-300 bg-violet-50 text-violet-900',
+};
+
+const EVENT_BADGE: Record<DailySlotType, string> = {
+    regular: 'bg-sky-100 text-sky-700',
+    cancellation: 'bg-slate-200 text-slate-600',
+    room_change: 'bg-orange-100 text-orange-700',
+    special_class: 'bg-emerald-100 text-emerald-700',
+    makeup_class: 'bg-violet-100 text-violet-700',
+};
+
+const STATUS_BADGE: Record<DailySlotStatus, string> = {
+    scheduled: 'bg-blue-50 text-blue-700',
+    pending: 'bg-amber-50 text-amber-700',
+    ongoing: 'bg-green-50 text-green-700',
+    completed: 'bg-gray-100 text-gray-600',
+    cancelled: 'bg-slate-100 text-slate-600',
+    auto_cancelled: 'bg-rose-50 text-rose-700',
+};
+
+
+const parseMinutes = (time: string) => {
+    const [hour, minute] = time.split(':').map(Number);
+    return hour * 60 + minute;
+};
+
+const slotTop = (time: string) => ((parseMinutes(time) - START_HOUR * 60) / 60) * HOUR_HEIGHT;
+const slotHeight = (start: string, end: string) => Math.max(((parseMinutes(end) - parseMinutes(start)) / 60) * HOUR_HEIGHT, 34);
+
+const formatHour = (hour: number) => `${hour % 12 || 12}${hour < 12 ? 'AM' : 'PM'}`;
+const formatTime = (time: string) => {
+    const [hour, minute] = time.split(':').map(Number);
+    return `${hour % 12 || 12}:${minute.toString().padStart(2, '0')}${hour < 12 ? 'AM' : 'PM'}`;
+};
+const formatTimeRange = (slot: DailySlot) => `${formatTime(slot.start_time)}–${formatTime(slot.end_time)}`;
+
+const selectedSlot = ref<DailySlot | null>(null);
+const activeAction = ref<'cancel' | 'change-room' | 'start' | 'complete' | null>(null);
+const showClassModal = ref(false);
+const classModalType = ref<'special_class' | 'makeup_class'>('special_class');
+const changeRoomId = ref<number | null>(null);
+const actionReason = ref('');
+
+const classForm = reactive({
+    room_id: null as number | null,
+    subject_code: '',
+    subject_title: '',
+    section: '',
+    instructor_name: '',
+    start_time: '08:00',
+    end_time: '10:00',
+    reason: '',
+});
+
+function resetClassForm() {
+    classForm.room_id = rooms.value[0]?.id ?? null;
+    classForm.subject_code = '';
+    classForm.subject_title = '';
+    classForm.section = '';
+    classForm.instructor_name = '';
+    classForm.start_time = '08:00';
+    classForm.end_time = '10:00';
+    classForm.reason = '';
+}
+
+function openClassModal(type: 'special_class' | 'makeup_class') {
+    classModalType.value = type;
+    resetClassForm();
+    showClassModal.value = true;
+}
+
+function closeClassModal() {
+    showClassModal.value = false;
+    resetClassForm();
+}
+
+function saveClassPreview() {
+    if (!classForm.room_id || !classForm.subject_code || !classForm.subject_title || !classForm.section) return;
+
+    localSlots.value.push({
+        id: Date.now(),
+        schedule_id: null,
+        exception_id: Date.now(),
+        room_id: classForm.room_id,
+        event_date: selectedDate.value,
+        source: 'exception',
+        event_type: classModalType.value,
+        status: 'pending',
+        subject_code: classForm.subject_code,
+        subject_title: classForm.subject_title,
+        section: classForm.section,
+        instructor_name: classForm.instructor_name || null,
+        start_time: classForm.start_time,
+        end_time: classForm.end_time,
+        reason: classForm.reason || null,
+    });
+
+    closeClassModal();
+}
+
+function openSlot(slot: DailySlot) {
+    selectedSlot.value = { ...slot };
+    activeAction.value = null;
+    actionReason.value = '';
+    changeRoomId.value = null;
+}
+
+function closeSlot() {
+    selectedSlot.value = null;
+    activeAction.value = null;
+    actionReason.value = '';
+    changeRoomId.value = null;
+}
+
+function openAction(action: 'cancel' | 'change-room' | 'start' | 'complete') {
+    activeAction.value = action;
+    actionReason.value = '';
+    changeRoomId.value = selectedSlot.value?.room_id ?? null;
+}
+
+function applyActionPreview() {
+    if (!selectedSlot.value || !activeAction.value) return;
+
+    const index = localSlots.value.findIndex((slot) => slot.id === selectedSlot.value?.id);
+    if (index === -1) return;
+
+    const current = { ...localSlots.value[index] };
+
+    if (activeAction.value === 'cancel') {
+        current.source = 'exception';
+        current.event_type = 'cancellation';
+        current.status = 'cancelled';
+        current.reason = actionReason.value || current.reason || 'Cancelled by admin.';
+    }
+
+    if (activeAction.value === 'change-room' && changeRoomId.value && changeRoomId.value !== current.room_id) {
+        current.source = 'exception';
+        current.event_type = 'room_change';
+        current.status = 'pending';
+        current.original_room_id = current.original_room_id ?? current.room_id;
+        current.original_room_code = current.original_room_code ?? roomCode(current.room_id);
+        current.room_id = changeRoomId.value;
+        current.reason = actionReason.value || current.reason || 'Room changed by admin.';
+    }
+
+    if (activeAction.value === 'start') {
+        current.status = 'ongoing';
+    }
+
+    if (activeAction.value === 'complete') {
+        current.status = 'completed';
+    }
+
+    localSlots.value.splice(index, 1, current);
+    selectedSlot.value = { ...current };
+    activeAction.value = null;
+}
+
+onMounted(() => {
+    clockTimer = window.setInterval(() => {
+        currentDateTime.value = new Date();
+    }, 1000);
+});
+
+onUnmounted(() => {
+    if (clockTimer) {
+        window.clearInterval(clockTimer);
+    }
+});
 </script>
 
 <template>
     <Head title="Daily Schedule" />
 
     <AppLayout :breadcrumbs="breadcrumbs" :pageheader="pageheader">
+        <div class="flex flex-col gap-5" @click="isRoomFilterOpen = false">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <PillTabs :tabs="manageTabs" />
 
-        <!-- Tab switcher -->
-        <div class="mb-6">
-            <PillTabs :tabs="manageTabs" />
+                <div class="flex flex-wrap gap-2">
+                    <button
+                        type="button"
+                        @click="openClassModal('special_class')"
+                        class="inline-flex items-center gap-1.5 rounded-lg border border-pup-maroon/15 bg-white px-3.5 py-2 text-sm font-medium text-pup-maroon shadow-sm transition hover:bg-pup-maroon-pale"
+                    >
+                        <Sparkles class="h-4 w-4" />
+                        Special Class
+                    </button>
+                    <button
+                        type="button"
+                        @click="openClassModal('makeup_class')"
+                        class="inline-flex items-center gap-1.5 rounded-lg bg-pup-maroon px-3.5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-pup-maroon-deep"
+                    >
+                        <Plus class="h-4 w-4" />
+                        Makeup Class
+                    </button>
+                </div>
+            </div>
+
+            <div
+                v-if="!currentTerm"
+                class="flex items-start gap-3 rounded-xl border border-pup-gold/40 bg-pup-gold-pale/70 px-4 py-3 text-sm text-pup-maroon-dark"
+            >
+                <AlertCircle class="mt-0.5 h-4 w-4 shrink-0 text-pup-gold-dark" />
+                <div>
+                    <p class="font-semibold">No active academic term is set.</p>
+                    <p class="text-pup-maroon-dark/80">
+                        Daily operations still open for preview, but backend schedule data should be tied to the active term once connected.
+                    </p>
+                </div>
+            </div>
+
+            <div
+                v-else
+                class="overflow-hidden rounded-2xl border border-pup-gold/40 bg-gradient-to-r from-pup-maroon via-pup-maroon to-pup-maroon-deep text-white shadow-lg shadow-pup-maroon/10"
+            >
+                <div class="flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div class="flex items-start gap-3">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
+                            <CalendarDays class="h-5 w-5 text-pup-gold-light" />
+                        </div>
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-pup-gold-light">Daily operations board</p>
+                            <p class="mt-1 text-lg font-semibold leading-tight">
+                                Operations: <span class="text-pup-gold-light">{{ selectedDateLabel }}</span>
+                            </p>
+                            <p class="mt-1 text-sm text-white/70">
+                                Room View shows the day by room and time. Table View is for detailed checking.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2 text-sm">
+                        <div class="flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 font-medium ring-1 ring-white/15">
+                            <RefreshCw class="h-4 w-4 text-pup-gold-light" />
+                            <span class="text-white/75">Last update:</span>
+                            <b>{{ lastUpdatedLabel }}</b>
+                        </div>
+
+                        <button
+                            type="button"
+                            @click="refreshDailyOperations"
+                            class="inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs font-bold text-pup-maroon shadow-sm transition hover:bg-pup-gold-pale"
+                        >
+                            <RefreshCw class="h-3.5 w-3.5" />
+                            Refresh
+                        </button>
+
+                        <div class="flex items-center gap-2 rounded-xl bg-pup-gold px-3 py-2 font-semibold text-pup-maroon-deep shadow-sm">
+                            <Clock3 class="h-4 w-4" />
+                            <span>Current time:</span>
+                            <b>{{ currentTimeLabel }}</b>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid gap-3 md:grid-cols-4">
+                <div class="rounded-xl border border-green-100 bg-green-50/70 p-4 shadow-sm">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-green-600">Available Now</p>
+                    <p class="mt-2 text-2xl font-bold text-green-800">{{ freeRoomsNowCount }}</p>
+                    <p class="text-xs text-green-600">selected rooms without active class</p>
+                </div>
+                <div class="rounded-xl border border-red-100 bg-red-50/70 p-4 shadow-sm">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-red-500">Occupied Now</p>
+                    <p class="mt-2 text-2xl font-bold text-red-800">{{ occupiedNowCount }}</p>
+                    <p class="text-xs text-red-600">classes currently using rooms</p>
+                </div>
+                <div class="rounded-xl border border-amber-100 bg-amber-50/70 p-4 shadow-sm">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-amber-600">Upcoming</p>
+                    <p class="mt-2 text-2xl font-bold text-amber-800">{{ upcomingSoonCount }}</p>
+                    <p class="text-xs text-amber-600">classes within the next 30 minutes</p>
+                </div>
+                <div class="rounded-xl border border-orange-100 bg-orange-50/70 p-4 shadow-sm">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-orange-600">Exceptions / Cancelled</p>
+                    <p class="mt-2 text-2xl font-bold text-orange-800">{{ exceptionCount }} / {{ cancelledCount }}</p>
+                    <p class="text-xs text-orange-600">changes from baseline / freed slots</p>
+                </div>
+            </div>
+
+            <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                    <div class="grid flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <label class="flex flex-col gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                            Date
+                            <input
+                                v-model="selectedDate"
+                                type="date"
+                                class="h-11 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 shadow-sm transition focus:border-pup-maroon focus:ring-2 focus:ring-pup-maroon/15"
+                            />
+                        </label>
+
+                        <div class="relative flex flex-col gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                            Room
+                            <button
+                                type="button"
+                                @click.stop="isRoomFilterOpen = !isRoomFilterOpen"
+                                class="flex h-11 items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 text-left text-sm font-medium normal-case tracking-normal text-gray-700 shadow-sm transition hover:border-pup-maroon/40 focus:border-pup-maroon focus:outline-none focus:ring-2 focus:ring-pup-maroon/15"
+                            >
+                                <span>{{ selectedRoomLabel }}</span>
+                                <ChevronDown class="h-4 w-4 text-gray-400" />
+                            </button>
+
+                            <div
+                                v-if="isRoomFilterOpen"
+                                class="absolute left-0 top-full z-30 mt-2 w-full min-w-[260px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
+                                @click.stop
+                            >
+                                <div class="flex items-center justify-between border-b border-gray-100 px-3 py-2">
+                                    <span class="text-xs font-semibold uppercase tracking-wide text-gray-500">Select rooms</span>
+                                    <button
+                                        type="button"
+                                        @click="clearRoomSelection"
+                                        class="text-xs font-semibold normal-case tracking-normal text-pup-maroon hover:underline"
+                                    >
+                                        All rooms
+                                    </button>
+                                </div>
+                                <div class="max-h-64 overflow-y-auto p-1.5">
+                                    <button
+                                        v-for="room in rooms"
+                                        :key="room.id"
+                                        type="button"
+                                        @click="toggleRoomSelection(room.id)"
+                                        class="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm normal-case tracking-normal transition hover:bg-pup-maroon-pale/70"
+                                        :class="isRoomSelected(room.id) ? 'bg-pup-maroon-pale text-pup-maroon' : 'text-gray-700'"
+                                    >
+                                        <span class="font-mono font-semibold">{{ room.code }}</span>
+                                        <span
+                                            class="flex h-4 w-4 items-center justify-center rounded border"
+                                            :class="isRoomSelected(room.id) ? 'border-pup-maroon bg-pup-maroon text-white' : 'border-gray-300 bg-white'"
+                                        >
+                                            <CheckCircle2 v-if="isRoomSelected(room.id)" class="h-3 w-3" />
+                                        </span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <label class="flex flex-col gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                            Type
+                            <select
+                                v-model="selectedType"
+                                class="h-11 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium normal-case tracking-normal text-gray-700 shadow-sm transition focus:border-pup-maroon focus:ring-2 focus:ring-pup-maroon/15"
+                            >
+                                <option value="all">All types</option>
+                                <option value="regular">Regular</option>
+                                <option value="cancellation">Cancellation</option>
+                                <option value="room_change">Room Change</option>
+                                <option value="special_class">Special Class</option>
+                                <option value="makeup_class">Makeup Class</option>
+                            </select>
+                        </label>
+                    </div>
+
+                    <div class="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-1">
+                        <button
+                            @click="viewMode = 'room'"
+                            class="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition"
+                            :class="viewMode === 'room' ? 'bg-pup-maroon text-white shadow-sm' : 'text-gray-600 hover:bg-white'"
+                        >
+                            <LayoutGrid class="h-4 w-4" />
+                            Room View
+                        </button>
+                        <button
+                            @click="viewMode = 'table'"
+                            class="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition"
+                            :class="viewMode === 'table' ? 'bg-pup-maroon text-white shadow-sm' : 'text-gray-600 hover:bg-white'"
+                        >
+                            <Table2 class="h-4 w-4" />
+                            Table View
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="viewMode === 'room'" class="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div class="min-w-[1120px]">
+                    <div class="flex border-b border-pup-maroon-deep bg-pup-maroon text-white">
+                        <div class="flex w-16 shrink-0 items-center justify-center border-r border-white/15 bg-pup-maroon-deep px-2 py-3 text-[10px] font-bold uppercase tracking-wider text-pup-gold-light">
+                            Time
+                        </div>
+                        <div
+                            v-for="room in roomsForGrid"
+                            :key="room.id"
+                            class="flex min-w-[118px] flex-1 items-center justify-center border-r border-white/10 px-1.5 py-3 last:border-r-0"
+                        >
+                            <span class="font-mono text-xs font-bold tracking-wide text-white">
+                                {{ room.code }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="flex" :style="{ height: GRID_HEIGHT + 'px' }">
+                        <div class="relative w-16 shrink-0 border-r border-gray-200 bg-gray-50/80">
+                            <div
+                                v-for="hour in hours"
+                                :key="hour"
+                                class="absolute right-0 flex w-full items-center justify-end pr-2"
+                                :style="{ top: ((hour - START_HOUR) * HOUR_HEIGHT - 8) + 'px' }"
+                            >
+                                <span class="text-[10px] font-medium leading-none text-gray-400">
+                                    {{ formatHour(hour) }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div
+                            v-for="room in roomsForGrid"
+                            :key="room.id"
+                            class="relative min-w-[118px] flex-1 border-r border-gray-100 last:border-r-0"
+                        >
+                            <div
+                                v-for="hour in hourLines"
+                                :key="`line-${room.id}-${hour}`"
+                                class="pointer-events-none absolute inset-x-0 border-t border-gray-100"
+                                :style="{ top: ((hour - START_HOUR) * HOUR_HEIGHT) + 'px' }"
+                            />
+                            <div
+                                v-for="hour in hourLines"
+                                :key="`half-${room.id}-${hour}`"
+                                class="pointer-events-none absolute inset-x-0 border-t border-dashed border-gray-50"
+                                :style="{ top: ((hour - START_HOUR) * HOUR_HEIGHT + HOUR_HEIGHT / 2) + 'px' }"
+                            />
+
+                            <button
+                                v-for="slot in room.slots"
+                                :key="slot.id"
+                                type="button"
+                                class="group absolute inset-x-1 overflow-hidden rounded-md border px-1.5 py-1 text-left shadow-sm transition hover:z-20 hover:brightness-95 hover:shadow-md"
+                                :class="EVENT_CLASS[slot.event_type]"
+                                :style="{
+                                    top: slotTop(slot.start_time) + 3 + 'px',
+                                    height: slotHeight(slot.start_time, slot.end_time) - 6 + 'px',
+                                }"
+                                @click="openSlot(slot)"
+                            >
+                                <div class="flex items-start justify-between gap-1">
+                                    <p class="line-clamp-2 text-[11px] font-bold leading-snug">
+                                        {{ slot.subject_code }}
+                                    </p>
+                                    <span
+                                        v-if="slot.event_type !== 'regular'"
+                                        class="shrink-0 rounded px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide"
+                                        :class="EVENT_BADGE[slot.event_type]"
+                                    >
+                                        {{ EVENT_TYPE_LABEL[slot.event_type].split(' ')[0] }}
+                                    </span>
+                                </div>
+                                <p class="line-clamp-2 text-[10px] font-semibold leading-snug opacity-80">
+                                    {{ slot.subject_title }}
+                                </p>
+                                <p class="mt-0.5 text-[10px] opacity-65">{{ formatTimeRange(slot) }}</p>
+                                <p class="truncate text-[10px] opacity-55">{{ slot.section }}</p>
+                                <p v-if="slot.event_type === 'room_change'" class="mt-0.5 truncate text-[9px] font-semibold opacity-70">
+                                    From {{ slot.original_room_code }}
+                                </p>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div v-else class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div class="flex items-center gap-2 border-b border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-700">
+                    <ListFilter class="h-4 w-4 text-pup-maroon" />
+                    Detailed daily list
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 text-sm">
+                        <thead class="bg-pup-maroon text-xs uppercase tracking-wide text-white">
+                            <tr>
+                                <th class="px-4 py-3 text-left font-semibold">Time</th>
+                                <th class="px-4 py-3 text-left font-semibold">Room</th>
+                                <th class="px-4 py-3 text-left font-semibold">Class</th>
+                                <th class="px-4 py-3 text-left font-semibold">Instructor</th>
+                                <th class="px-4 py-3 text-left font-semibold">Type</th>
+                                <th class="px-4 py-3 text-left font-semibold">Status</th>
+                                <th class="px-4 py-3 text-right font-semibold">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100 bg-white">
+                            <template v-for="group in tableTimeGroups" :key="group.key">
+                                <tr
+                                    v-for="(slot, index) in group.slots"
+                                    :key="slot.id"
+                                    class="hover:bg-pup-maroon-pale/30"
+                                >
+                                    <td
+                                        v-if="index === 0"
+                                        :rowspan="group.slots.length"
+                                        class="whitespace-nowrap border-r border-gray-100 bg-gray-50/70 px-4 py-3 align-top font-semibold text-gray-700"
+                                    >
+                                        {{ group.label }}
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="font-semibold text-gray-800">{{ roomCode(slot.room_id) }}</div>
+                                        <div v-if="slot.original_room_code" class="text-xs text-orange-600">
+                                            moved from {{ slot.original_room_code }}
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="font-semibold text-gray-900">{{ slot.subject_code }} · {{ slot.subject_title }}</div>
+                                        <div class="text-xs text-gray-500">{{ slot.section }}</div>
+                                    </td>
+                                    <td class="px-4 py-3 text-gray-600">{{ slot.instructor_name || '—' }}</td>
+                                    <td class="px-4 py-3">
+                                        <span class="rounded-full px-2.5 py-1 text-xs font-semibold" :class="EVENT_BADGE[slot.event_type]">
+                                            {{ EVENT_TYPE_LABEL[slot.event_type] }}
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <span class="rounded-full px-2.5 py-1 text-xs font-semibold" :class="STATUS_BADGE[slot.status]">
+                                            {{ STATUS_LABEL[slot.status] }}
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 text-right">
+                                        <button
+                                            @click="openSlot(slot)"
+                                            class="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-pup-maroon hover:text-pup-maroon"
+                                        >
+                                            <Eye class="h-3.5 w-3.5" />
+                                            View
+                                        </button>
+                                    </td>
+                                </tr>
+                            </template>
+
+                            <tr v-if="tableTimeGroups.length === 0">
+                                <td colspan="7" class="px-4 py-10 text-center text-sm text-gray-500">
+                                    No schedule items match the selected filters.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
-
-        <!-- Content -->
-
-
     </AppLayout>
+
+    <div v-if="selectedSlot" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+        <div class="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div class="flex items-start justify-between border-b border-gray-200 px-6 py-4">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-pup-maroon">Schedule item</p>
+                    <h3 class="mt-1 text-xl font-bold text-gray-900">{{ selectedSlot.subject_code }} · {{ selectedSlot.subject_title }}</h3>
+                    <p class="mt-1 text-sm text-gray-500">{{ selectedSlot.section }} · {{ formatTimeRange(selectedSlot) }}</p>
+                </div>
+                <button @click="closeSlot" class="rounded-full p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700">
+                    <X class="h-5 w-5" />
+                </button>
+            </div>
+
+            <div class="space-y-5 px-6 py-5">
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                        <p class="text-xs font-semibold uppercase text-gray-400">Room</p>
+                        <p class="mt-1 font-semibold text-gray-900">{{ roomLabel(selectedSlot.room_id) }}</p>
+                        <p v-if="selectedSlot.original_room_code" class="mt-1 text-xs font-semibold text-orange-600">
+                            Moved from {{ selectedSlot.original_room_code }}
+                        </p>
+                    </div>
+                    <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                        <p class="text-xs font-semibold uppercase text-gray-400">Instructor</p>
+                        <p class="mt-1 font-semibold text-gray-900">{{ selectedSlot.instructor_name || '—' }}</p>
+                    </div>
+                    <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                        <p class="text-xs font-semibold uppercase text-gray-400">Type</p>
+                        <span class="mt-1 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" :class="EVENT_BADGE[selectedSlot.event_type]">
+                            {{ EVENT_TYPE_LABEL[selectedSlot.event_type] }}
+                        </span>
+                    </div>
+                    <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                        <p class="text-xs font-semibold uppercase text-gray-400">Status</p>
+                        <span class="mt-1 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" :class="STATUS_BADGE[selectedSlot.status]">
+                            {{ STATUS_LABEL[selectedSlot.status] }}
+                        </span>
+                    </div>
+                </div>
+
+                <div v-if="selectedSlot.reason" class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    <span class="font-semibold">Reason:</span> {{ selectedSlot.reason }}
+                </div>
+
+                <div v-if="!activeAction" class="flex flex-wrap justify-end gap-2 border-t border-gray-100 pt-4">
+                    <button
+                        v-if="selectedSlot.status !== 'cancelled'"
+                        @click="openAction('cancel')"
+                        class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                    >
+                        <Ban class="h-4 w-4" />
+                        Cancel
+                    </button>
+                    <button
+                        v-if="selectedSlot.status !== 'cancelled'"
+                        @click="openAction('change-room')"
+                        class="inline-flex items-center gap-2 rounded-lg border border-orange-200 px-3 py-2 text-sm font-semibold text-orange-700 transition hover:bg-orange-50"
+                    >
+                        <ArrowRightLeft class="h-4 w-4" />
+                        Change Room
+                    </button>
+                    <button
+                        v-if="['scheduled', 'pending'].includes(selectedSlot.status)"
+                        @click="openAction('start')"
+                        class="inline-flex items-center gap-2 rounded-lg border border-green-200 px-3 py-2 text-sm font-semibold text-green-700 transition hover:bg-green-50"
+                    >
+                        <Play class="h-4 w-4" />
+                        Mark Started
+                    </button>
+                    <button
+                        v-if="selectedSlot.status === 'ongoing'"
+                        @click="openAction('complete')"
+                        class="inline-flex items-center gap-2 rounded-lg bg-pup-maroon px-3 py-2 text-sm font-semibold text-white transition hover:bg-pup-maroon-deep"
+                    >
+                        <CheckCircle2 class="h-4 w-4" />
+                        Complete
+                    </button>
+                </div>
+
+                <div v-else class="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                    <h4 class="font-semibold text-gray-900">
+                        <template v-if="activeAction === 'cancel'">Cancel this class?</template>
+                        <template v-if="activeAction === 'change-room'">Change room for this date?</template>
+                        <template v-if="activeAction === 'start'">Mark this class as started?</template>
+                        <template v-if="activeAction === 'complete'">Mark this class as completed?</template>
+                    </h4>
+                    <p class="mt-1 text-sm text-gray-500">
+                        This is preview behavior for the frontend. Backend wiring will later create or update schedule exceptions.
+                    </p>
+
+                    <label v-if="activeAction === 'change-room'" class="mt-4 flex flex-col gap-1 text-sm font-medium text-gray-600">
+                        New room
+                        <select v-model="changeRoomId" class="rounded-lg border-gray-200 text-sm focus:border-pup-maroon focus:ring-pup-maroon">
+                            <option v-for="room in rooms" :key="room.id" :value="room.id">
+                                {{ room.code }} · {{ room.name }}
+                            </option>
+                        </select>
+                    </label>
+
+                    <label v-if="['cancel', 'change-room'].includes(activeAction)" class="mt-4 flex flex-col gap-1 text-sm font-medium text-gray-600">
+                        Reason
+                        <textarea
+                            v-model="actionReason"
+                            rows="3"
+                            class="rounded-lg border-gray-200 text-sm focus:border-pup-maroon focus:ring-pup-maroon"
+                            placeholder="Optional note for this daily operation"
+                        />
+                    </label>
+
+                    <div class="mt-4 flex justify-end gap-2">
+                        <button @click="activeAction = null" class="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-white">
+                            Back
+                        </button>
+                        <button @click="applyActionPreview" class="rounded-lg bg-pup-maroon px-3 py-2 text-sm font-semibold text-white hover:bg-pup-maroon-deep">
+                            Apply Preview
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div v-if="showClassModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+        <div class="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div class="flex items-start justify-between border-b border-gray-200 px-6 py-4">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-pup-maroon">Daily operation</p>
+                    <h3 class="mt-1 text-xl font-bold text-gray-900">
+                        {{ classModalType === 'special_class' ? 'Add Special Class' : 'Add Makeup Class' }}
+                    </h3>
+                    <p class="mt-1 text-sm text-gray-500">Create a one-date class entry for {{ selectedDateLabel }}.</p>
+                </div>
+                <button @click="closeClassModal" class="rounded-full p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700">
+                    <X class="h-5 w-5" />
+                </button>
+            </div>
+
+            <div class="grid gap-4 px-6 py-5 sm:grid-cols-2">
+                <label class="flex flex-col gap-1 text-sm font-medium text-gray-600">
+                    Room
+                    <select v-model="classForm.room_id" class="rounded-lg border-gray-200 text-sm focus:border-pup-maroon focus:ring-pup-maroon">
+                        <option v-for="room in rooms" :key="room.id" :value="room.id">
+                            {{ room.code }} · {{ room.name }}
+                        </option>
+                    </select>
+                </label>
+
+                <label class="flex flex-col gap-1 text-sm font-medium text-gray-600">
+                    Section
+                    <input v-model="classForm.section" type="text" class="rounded-lg border-gray-200 text-sm focus:border-pup-maroon focus:ring-pup-maroon" placeholder="BSCPE 4-2" />
+                </label>
+
+                <label class="flex flex-col gap-1 text-sm font-medium text-gray-600">
+                    Subject code
+                    <input v-model="classForm.subject_code" type="text" class="rounded-lg border-gray-200 text-sm focus:border-pup-maroon focus:ring-pup-maroon" placeholder="CMPE 499" />
+                </label>
+
+                <label class="flex flex-col gap-1 text-sm font-medium text-gray-600">
+                    Subject title
+                    <input v-model="classForm.subject_title" type="text" class="rounded-lg border-gray-200 text-sm focus:border-pup-maroon focus:ring-pup-maroon" placeholder="Capstone Consultation" />
+                </label>
+
+                <label class="flex flex-col gap-1 text-sm font-medium text-gray-600">
+                    Start time
+                    <input v-model="classForm.start_time" type="time" class="rounded-lg border-gray-200 text-sm focus:border-pup-maroon focus:ring-pup-maroon" />
+                </label>
+
+                <label class="flex flex-col gap-1 text-sm font-medium text-gray-600">
+                    End time
+                    <input v-model="classForm.end_time" type="time" class="rounded-lg border-gray-200 text-sm focus:border-pup-maroon focus:ring-pup-maroon" />
+                </label>
+
+                <label class="flex flex-col gap-1 text-sm font-medium text-gray-600 sm:col-span-2">
+                    Instructor
+                    <input v-model="classForm.instructor_name" type="text" class="rounded-lg border-gray-200 text-sm focus:border-pup-maroon focus:ring-pup-maroon" placeholder="Instructor name" />
+                </label>
+
+                <label class="flex flex-col gap-1 text-sm font-medium text-gray-600 sm:col-span-2">
+                    Reason / note
+                    <textarea v-model="classForm.reason" rows="3" class="rounded-lg border-gray-200 text-sm focus:border-pup-maroon focus:ring-pup-maroon" placeholder="Optional reason for this one-date class" />
+                </label>
+            </div>
+
+            <div class="flex justify-end gap-2 border-t border-gray-200 bg-gray-50 px-6 py-4">
+                <button @click="closeClassModal" class="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-white">
+                    Cancel
+                </button>
+                <button @click="saveClassPreview" class="rounded-lg bg-pup-maroon px-4 py-2 text-sm font-semibold text-white hover:bg-pup-maroon-deep">
+                    Save Preview
+                </button>
+            </div>
+        </div>
+    </div>
 </template>

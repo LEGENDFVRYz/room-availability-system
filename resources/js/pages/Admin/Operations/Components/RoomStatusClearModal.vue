@@ -18,8 +18,9 @@ interface RoomOverrideItem {
     updated_by_name?: string | null;
 }
 
-defineProps<{
+const props = defineProps<{
     selectedOverride: RoomOverrideItem | null;
+    processing?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -81,8 +82,9 @@ function statusBadgeClass(status: OverrideStatus): string {
                     </div>
                     <button
                         type="button"
+                        :disabled="processing"
                         @click="emit('close')"
-                        class="rounded-lg p-1.5 text-white/60 transition hover:bg-white/10 hover:text-white"
+                        class="rounded-lg p-1.5 text-white/60 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                     >
                         <X class="h-5 w-5" />
                     </button>
@@ -118,19 +120,21 @@ function statusBadgeClass(status: OverrideStatus): string {
                 <div class="flex items-center justify-end gap-2 border-t border-gray-100 px-6 py-4">
                     <button
                         type="button"
+                        :disabled="processing"
                         @click="emit('cancel')"
-                        class="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
+                        class="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                         Cancel
                     </button>
 
                     <button
                         type="button"
-                        :disabled="!selectedOverride"
+                        :disabled="!selectedOverride || processing"
                         @click="emit('confirm')"
                         class="rounded-lg bg-red-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                        Clear Override
+                        <template v-if="processing">Clearing...</template>
+                        <template v-else>Clear Override</template>
                     </button>
                 </div>
             </div>

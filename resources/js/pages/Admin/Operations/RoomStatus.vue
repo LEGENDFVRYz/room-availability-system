@@ -5,11 +5,10 @@ import RoomStatusClearModal from './Components/RoomStatusClearModal.vue';
 import RoomStatusViewModal from './Components/RoomStatusViewModal.vue';
 import type { BreadcrumbItem, PageHeader } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { Archive, Building2, CalendarClock, CalendarDays, CheckCircle2, ChevronDown, Clock, Eye, Plus, Power, Search, ShieldAlert, Wrench } from 'lucide-vue-next';
+import { Archive, Building2, CalendarClock, CalendarDays, CheckCircle2, ChevronDown, Clock, Eye, Plus, Power, Search, ShieldAlert, Wrench, School } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 // --- Page Types ---
-
 interface RoomOption {
     id: number;
     code: string;
@@ -46,15 +45,16 @@ type RoomStatusForm = {
 
 type ModalMode = 'create' | 'view' | 'clear';
 
-// --- Props Configuration ---
+
+// --- Page Props and Template Setup ---
 const props = defineProps<{
     rooms: RoomOption[];
     overrides: RoomOverrideItem[];
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Dashboard',   href: '/admin/dashboard' },
-    { title: 'Operations',  href: '/admin/operations/daily' },
+    { title: 'Dashboard', href: '/admin/dashboard' },
+    { title: 'Operations', href: '/admin/operations/daily' },
     { title: 'Room Status', href: '/admin/operations/room-status' },
 ];
 
@@ -64,8 +64,8 @@ const pageheader: PageHeader = {
 };
 
 const operationTabs = [
-    { label: 'Daily Schedule', href: '/admin/operations/daily',       icon: CalendarDays },
-    { label: 'Room Status',    href: '/admin/operations/room-status', icon: Building2 },
+    { label: 'Daily Schedule', href: '/admin/operations/daily', icon: CalendarDays },
+    { label: 'Room Status', href: '/admin/operations/room-status', icon: School },
 ];
 
 const overrideTabs: Array<{ label: string; value: OverrideFilter }> = [
@@ -74,12 +74,15 @@ const overrideTabs: Array<{ label: string; value: OverrideFilter }> = [
     { label: 'Upcoming', value: 'upcoming' },
     { label: 'Archive', value: 'history' },
 ];
+
 const overrideStatuses: OverrideStatus[] = ['maintenance', 'unavailable', 'reserved'];
 
-// --- Helper Functions ---
+
+// ---- Helpers -----
 function toLocalInputValue(dateOrString: Date | string): string {
     const date = typeof dateOrString === 'string' ? new Date(dateOrString) : dateOrString;
     const timezoneOffset = date.getTimezoneOffset() * 60000;
+
     return new Date(date.getTime() - timezoneOffset).toISOString().slice(0, 16);
 }
 
@@ -87,7 +90,6 @@ function parseDate(value: string): Date {
     return new Date(value);
 }
 
-// --- State Management ---
 const activeTab = ref<OverrideFilter>('all');
 const search = ref('');
 const selectedStatus = ref<'all' | OverrideStatus>('all');
@@ -95,8 +97,8 @@ const selectedRoom = ref('all');
 const activeModal = ref<ModalMode | null>(null);
 const selectedOverride = ref<RoomOverrideItem | null>(null);
 const isDetailsEditing = ref(false);
+const isClearing = ref(false);
 
-// Using Inertia useForm instead of Vue reactive for automated error handling and requests
 const form = useForm<RoomStatusForm>({
     room_id: props.rooms[0]?.id ?? 1,
     status: 'maintenance',
@@ -122,27 +124,24 @@ function overrideState(item: RoomOverrideItem): OverrideState {
     return 'active';
 }
 
-// Directly filtering the props data
 const filteredOverrides = computed(() => {
     const needle = search.value.trim().toLowerCase();
 
-    return props.overrides.filter((item) => {
-        const state = overrideState(item);
-        const matchesTab = activeTab.value === 'all'
-            ? state !== 'history'
-            : state === activeTab.value;
-        const matchesStatus = selectedStatus.value === 'all' || item.status === selectedStatus.value;
-        const matchesRoom = selectedRoom.value === 'all' || item.room_id === Number(selectedRoom.value);
-        const matchesSearch = !needle || [
-            item.room_code,
-            item.room_name,
-            item.status,
-            item.reason ?? '',
-            item.created_by_name,
-        ].some((value) => value.toLowerCase().includes(needle));
+    return [...props.overrides]
+        .filter((item) => {
+            const state = overrideState(item);
+            const matchesTab = activeTab.value === 'all' ? state !== 'history' : state === activeTab.value;
+            const matchesStatus = selectedStatus.value === 'all' || item.status === selectedStatus.value;
+            const matchesRoom = selectedRoom.value === 'all' || item.room_id === Number(selectedRoom.value);
+            const matchesSearch =
+                !needle ||
+                [item.room_code, item.room_name, item.status, item.reason ?? '', item.created_by_name, item.updated_by_name ?? ''].some((value) =>
+                    value.toLowerCase().includes(needle),
+                );
 
-        return matchesTab && matchesStatus && matchesRoom && matchesSearch;
-    }).sort((a, b) => parseDate(a.starts_at).getTime() - parseDate(b.starts_at).getTime());
+            return matchesTab && matchesStatus && matchesRoom && matchesSearch;
+        })
+        .sort((a, b) => parseDate(a.starts_at).getTime() - parseDate(b.starts_at).getTime());
 });
 
 const summary = computed(() => {
@@ -171,7 +170,7 @@ function formatDateTime(value: string | null): string {
 
 function durationLabel(item: RoomOverrideItem): string {
     if (!item.ends_at) return 'Until manually cleared';
-    
+
     const diff = parseDate(item.ends_at).getTime() - parseDate(item.starts_at).getTime();
     const hours = Math.max(Math.round(diff / (60 * 60 * 1000)), 1);
 
@@ -216,10 +215,10 @@ function filterLabel(filter: OverrideFilter): string {
 
 function filterBadgeClass(filter: OverrideFilter): string {
     if (filter === 'all') return 'border-pup-maroon/20 bg-pup-maroon-pale text-pup-maroon';
+
     return stateBadgeClass(filter);
 }
 
-// --- Modal & Form Logic ---
 function resetForm(item?: RoomOverrideItem | null) {
     form.room_id = item?.room_id ?? props.rooms[0]?.id ?? 1;
     form.status = item?.status ?? 'maintenance';
@@ -228,6 +227,15 @@ function resetForm(item?: RoomOverrideItem | null) {
     form.ends_at = item?.ends_at ? toLocalInputValue(item.ends_at) : '';
     form.indefinite = item ? !item.ends_at : false;
     form.clearErrors();
+}
+
+function applyPayloadToForm(payload: RoomStatusForm) {
+    form.room_id = Number(payload.room_id);
+    form.status = payload.status;
+    form.reason = payload.reason ?? '';
+    form.starts_at = payload.starts_at;
+    form.indefinite = Boolean(payload.indefinite);
+    form.ends_at = form.indefinite ? '' : payload.ends_at || '';
 }
 
 function openCreate() {
@@ -246,6 +254,7 @@ function openView(item: RoomOverrideItem) {
 
 function enableDetailsEdit() {
     if (!selectedOverride.value) return;
+
     resetForm(selectedOverride.value);
     isDetailsEditing.value = true;
 }
@@ -269,34 +278,47 @@ function cancelOrCloseModal() {
         resetForm(selectedOverride.value);
         return;
     }
+
     closeModal();
 }
 
-// --- API Actions ---
-function saveOverride() {
+function saveOverride(payload: RoomStatusForm) {
+    applyPayloadToForm(payload);
+    form.clearErrors();
+
+    const options = {
+        preserveScroll: true,
+        onSuccess: () => closeModal(),
+    };
+
     if (activeModal.value === 'create') {
-        form.post('/admin/operations/room-status', {
-            preserveScroll: true,
-            onSuccess: () => closeModal(),
-        });
-    } else if (activeModal.value === 'view' && isDetailsEditing.value && selectedOverride.value) {
-        form.put(`/admin/operations/room-status/${selectedOverride.value.id}`, {
-            preserveScroll: true,
-            onSuccess: () => closeModal(),
-        });
+        form.post('/admin/operations/room-status', options);
+        return;
+    }
+
+    if (activeModal.value === 'view' && isDetailsEditing.value && selectedOverride.value) {
+        form.patch(`/admin/operations/room-status/${selectedOverride.value.id}`, options);
     }
 }
 
 function clearOverride() {
     if (!selectedOverride.value) return;
 
-    router.post(`/admin/operations/room-status/${selectedOverride.value.id}/clear`, {}, {
-        preserveScroll: true,
-        onSuccess: () => closeModal(),
-    });
+    isClearing.value = true;
+
+    router.patch(
+        `/admin/operations/room-status/${selectedOverride.value.id}/clear`,
+        {},
+        {
+            preserveScroll: true,
+            onSuccess: () => closeModal(),
+            onFinish: () => {
+                isClearing.value = false;
+            },
+        },
+    );
 }
 </script>
-
 
 <template>
     <Head title="Room Status" />
@@ -521,27 +543,27 @@ function clearOverride() {
                 </div>
             </div>
         </div>
+
+        <RoomStatusViewModal
+            v-if="activeModal === 'create' || activeModal === 'view'"
+            :mode="activeModal === 'create' ? 'create' : 'view'"
+            :is-editing="isDetailsEditing"
+            :selected-override="selectedOverride"
+            :rooms="rooms"
+            :form="form"
+            :override-statuses="overrideStatuses"
+            @close="closeModal"
+            @cancel="cancelOrCloseModal"
+            @enable-edit="enableDetailsEdit"
+            @save="saveOverride"
+        />
+
+        <RoomStatusClearModal
+            v-if="activeModal === 'clear'"
+            :selected-override="selectedOverride"
+            @close="closeModal"
+            @cancel="closeModal"
+            @confirm="clearOverride"
+        />
     </AppLayout>
-
-    <RoomStatusViewModal
-        v-if="activeModal === 'create' || activeModal === 'view'"
-        :mode="activeModal === 'view' ? 'view' : 'create'"
-        :is-editing="isDetailsEditing"
-        :selected-override="selectedOverride"
-        :rooms="rooms"
-        :form="form"
-        :override-statuses="overrideStatuses"
-        @close="closeModal"
-        @cancel="cancelOrCloseModal"
-        @enable-edit="enableDetailsEdit"
-        @save="saveOverride"
-    />
-
-    <RoomStatusClearModal
-        v-if="activeModal === 'clear'"
-        :selected-override="selectedOverride"
-        @close="closeModal"
-        @cancel="closeModal"
-        @confirm="clearOverride"
-    />
 </template>

@@ -47,6 +47,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified'])->group(
     Route::get('/operations/daily',         [OperationController::class, 'daily'])->name('manage.configs');
 
     # Operations - Room Status
-    Route::get('/operations/room-status',   [OperationController::class, 'rooms'])->name('manage.configs');
+    Route::get('/operations/room-status',                        [OperationController::class, 'rooms'])->name('operations.room-status');
+    Route::post('/operations/room-status',                       [OperationController::class, 'storeRoomOverride'])->name('operations.room-status.store');
+    Route::patch('/operations/room-status/{roomOverride}',       [OperationController::class, 'updateRoomOverride'])->name('operations.room-status.update');
+    Route::patch('/operations/room-status/{roomOverride}/clear', [OperationController::class, 'clearRoomOverride'])->name('operations.room-status.clear');
     
 });

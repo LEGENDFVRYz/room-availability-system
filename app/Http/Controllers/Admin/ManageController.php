@@ -102,16 +102,8 @@ class ManageController extends Controller
 
     public function configs(): Response
     {
-        $current = (new AcademicTermService())->getCurrent();
-
-        return Inertia::render('Admin/Manage/Configs', [
-            'currentTerm' => $current ? [
-                'school_year'    => $current->school_year_label,
-                'semester_label' => $current->semester->label(),
-                'year_start'     => $current->year_start,
-                'semester'       => $current->semester->value,
-            ] : null,
-        ]);
+        // currentTerm is automatically injected by middleware
+        return Inertia::render('Admin/Manage/Configs');
     }
 
     public function setCurrentTerm(Request $request): RedirectResponse

@@ -1,18 +1,15 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import PillTabs from '@/components/PillTabs.vue';
-import type { BreadcrumbItem, PageHeader } from '@/types';
-import { Head, useForm } from '@inertiajs/vue3';
+import type { BreadcrumbItem, PageHeader, SharedData } from '@/types';
+import { Head, useForm, usePage } from '@inertiajs/vue3';
 import { Building2, Settings2, GraduationCap, Server, Plus, ChevronDown } from 'lucide-vue-next';
+import { computed } from 'vue';
 
-interface CurrentTerm {
-    school_year: string;
-    semester_label: string;
-    year_start: number;
-    semester: number;
-}
 
-const props = defineProps<{ currentTerm: CurrentTerm | null }>();
+// Props and template config
+const page = usePage<SharedData>();
+const currentTerm = computed(() => page.props.currentTerm);
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: '/admin/dashboard' },
@@ -48,8 +45,8 @@ const semesterOptions = [
 ];
 
 const form = useForm({
-    year_start: props.currentTerm?.year_start ?? currentYear,
-    semester:   props.currentTerm?.semester   ?? 1,
+    year_start: currentTerm.value?.year_start ?? currentYear,
+    semester:   currentTerm.value?.semester   ?? 1,
 });
 
 function submit() {

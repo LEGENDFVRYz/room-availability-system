@@ -16,12 +16,6 @@ use Inertia\Response;
 class ScheduleController extends Controller
 {
     // ── Shared helpers ────────────────────────────────────────────────────────
-
-    private function currentTerm()
-    {
-        return (new AcademicTermService())->getCurrent();
-    }
-
     private function activeRooms(): \Illuminate\Support\Collection
     {
         return Room::where('is_active', true)
@@ -47,23 +41,21 @@ class ScheduleController extends Controller
 
     public function sections(): Response
     {
-        $term = $this->currentTerm();
+        $term = (new AcademicTermService())->getCurrent();
 
         return Inertia::render('Admin/Schedule/Sections', [
             'sections'    => $term ? (new ScheduleService())->getSectionsForTerm($term) : [],
             'rooms'       => $this->activeRooms(),
-            'currentTerm' => $this->termPayload($term),
         ]);
     }
 
     public function rooms(): Response
     {
-        $term = $this->currentTerm();
+        $term = (new AcademicTermService())->getCurrent();
 
         return Inertia::render('Admin/Schedule/Rooms', [
             'room_schedules' => $term ? (new ScheduleService())->getRoomSchedulesForTerm($term) : [],
             'rooms'          => $this->activeRooms(),
-            'currentTerm'    => $this->termPayload($term),
         ]);
     }
 
@@ -71,7 +63,7 @@ class ScheduleController extends Controller
 
     public function store(ScheduleRequest $request): RedirectResponse
     {
-        $term = $this->currentTerm();
+        $term = (new AcademicTermService())->getCurrent();
 
         if (! $term) {
             return redirect()->route('admin.schedules.sections')

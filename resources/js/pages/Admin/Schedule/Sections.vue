@@ -4,10 +4,10 @@ import PillTabs from '@/components/PillTabs.vue';
 import ScheduleModal, { type ScheduleFormData } from './Components/ScheduleModal.vue';
 import ScheduleDeleteModal from './Components/ScheduleDeleteModal.vue';
 import SectionScheduleView, { type ScheduleEntry } from './Components/SectionScheduleView.vue';
-import type { BreadcrumbItem, PageHeader } from '@/types';
-import { Head } from '@inertiajs/vue3';
+import type { BreadcrumbItem, PageHeader, SharedData } from '@/types';
+import { Head, usePage } from '@inertiajs/vue3';
 import { LayoutGrid, Building2, Plus } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 
 
 // Types
@@ -23,18 +23,15 @@ interface Section {
     schedules: ScheduleEntry[];
 }
 
-interface TermInfo {
-    label: string;
-    semester: string;
-}
-
 
 // Props
 defineProps<{
     sections: Section[];
     rooms: Room[];
-    currentTerm: TermInfo | null;
 }>();
+
+const page = usePage<SharedData>();
+const currentTerm = computed(() => page.props.currentTerm);
 
 
 // --- Layouts
@@ -138,7 +135,6 @@ function closeDeleteModal() {
 
             <SectionScheduleView
                 :sections="sections"
-                :current-term="currentTerm"
                 @open-edit="openEdit"
                 @section-changed="label => currentSection = label"
             />

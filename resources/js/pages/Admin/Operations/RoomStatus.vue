@@ -9,12 +9,6 @@ import { Archive, Building2, CalendarClock, CalendarDays, CheckCircle2, ChevronD
 import { computed, ref } from 'vue';
 
 // --- Page Types ---
-interface CurrentTerm {
-    school_year: string;
-    semester_label: string;
-    year_start: number;
-    semester: number;
-}
 
 interface RoomOption {
     id: number;
@@ -54,7 +48,6 @@ type ModalMode = 'create' | 'view' | 'clear';
 
 // --- Props Configuration ---
 const props = defineProps<{
-    currentTerm: CurrentTerm | null;
     rooms: RoomOption[];
     overrides: RoomOverrideItem[];
 }>();

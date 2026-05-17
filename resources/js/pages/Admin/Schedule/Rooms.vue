@@ -5,9 +5,11 @@ import ScheduleModal, { type ScheduleFormData } from './Components/ScheduleModal
 import ScheduleDeleteModal from './Components/ScheduleDeleteModal.vue';
 import RoomScheduleView, { type RoomEntry, type RoomSchedule } from './Components/RoomScheduleView.vue';
 import type { BreadcrumbItem, PageHeader } from '@/types';
-import { Head } from '@inertiajs/vue3';
+import { Head, usePage } from '@inertiajs/vue3';
 import { LayoutGrid, Building2, Plus } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
+import type { SharedData } from '@/types';
+
 
 // Types
 interface Room {
@@ -16,17 +18,14 @@ interface Room {
     code: string;
 }
 
-interface TermInfo {
-    label: string;
-    semester: string;
-}
-
 // Props
 defineProps<{
     room_schedules: RoomSchedule[];
     rooms: Room[];
-    currentTerm: TermInfo | null;
 }>();
+
+const page = usePage<SharedData>();
+const currentTerm = computed(() => page.props.currentTerm);
 
 
 // --- Layouts

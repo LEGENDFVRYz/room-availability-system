@@ -26,12 +26,21 @@ export interface Flash {
     error: string | null;
 }
 
+export interface CurrentTerm {
+    id: number;
+    school_year: string;
+    semester_label: string;
+    year_start: number;
+    semester: number;
+}
+
 export interface SharedData {
     [key: string]: unknown;
     name: string;
     quote: { message: string; author: string };
     auth: Auth;
     flash: Flash;
+    currentTerm: CurrentTerm | null;
     ziggy: {
         location: string;
         url: string;

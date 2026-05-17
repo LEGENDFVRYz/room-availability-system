@@ -24,16 +24,11 @@ interface Section {
     schedules: ScheduleEntry[];
 }
 
-interface TermInfo {
-    label: string;
-    semester: string;
-}
 
 // ─── Props / emits ────────────────────────────────────────────────────────────
 
 const props = defineProps<{
     sections: Section[];
-    currentTerm: TermInfo | null;
 }>();
 
 const emit = defineEmits<{

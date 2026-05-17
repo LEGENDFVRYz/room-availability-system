@@ -6,6 +6,7 @@ use App\Enums\DayOfWeek;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Schedule extends Model
 {
@@ -36,6 +37,10 @@ class Schedule extends Model
         ];
     }
 
+
+    // -------------------------------------------------------
+    // Relationships
+    // -------------------------------------------------------
     public function academicTerm(): BelongsTo
     {
         return $this->belongsTo(AcademicTerm::class);
@@ -56,6 +61,15 @@ class Schedule extends Model
         return $this->belongsTo(User::class, 'updated_by');
     }
 
+    public function scheduleExceptions(): HasMany
+    {
+        return $this->hasMany(ScheduleException::class);
+    }
+
+
+    // -------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------
     public function scopeActive($query)
     {
         return $query->where('is_active', true);

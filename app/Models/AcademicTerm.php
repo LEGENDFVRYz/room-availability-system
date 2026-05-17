@@ -36,6 +36,10 @@ class AcademicTerm extends Model
         ];
     }
 
+
+    // -------------------------------------------------------
+    // Relationships
+    // -------------------------------------------------------
     /** e.g. "2025-2026" */
     public function getSchoolYearLabelAttribute(): string
     {
@@ -55,6 +59,15 @@ class AcademicTerm extends Model
         return $this->hasMany(Schedule::class);
     }
 
+    public function scheduleExceptions(): HasMany
+    {
+        return $this->hasMany(ScheduleException::class);
+    }
+
+
+    // -------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------
     public function scopeCurrent($query)
     {
         return $query->where('is_current', true);

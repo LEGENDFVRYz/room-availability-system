@@ -37,6 +37,10 @@ class Room extends Model
         ];
     }
 
+
+    // -------------------------------------------------------
+    // Relationships
+    // -------------------------------------------------------
     public function schedules(): HasMany
     {
         return $this->hasMany(Schedule::class);
@@ -52,6 +56,20 @@ class Room extends Model
         return $this->belongsTo(User::class, 'updated_by');
     }
 
+    public function roomOverrides(): HasMany
+    {
+        return $this->hasMany(RoomOverride::class);
+    }
+
+    public function scheduleExceptions(): HasMany
+    {
+        return $this->hasMany(ScheduleException::class);
+    }
+
+
+    // -------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------
     public function scopeActive($query)
     {
         return $query->where('is_active', true)->orderBy('display_order');

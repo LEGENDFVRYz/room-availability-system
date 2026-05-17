@@ -36,6 +36,10 @@ class User extends Authenticatable
         ];
     }
 
+
+    // -------------------------------------------------------
+    // Relationships
+    // -------------------------------------------------------
     public function createdRooms(): HasMany
     {
         return $this->hasMany(Room::class, 'created_by');
@@ -44,5 +48,25 @@ class User extends Authenticatable
     public function createdSchedules(): HasMany
     {
         return $this->hasMany(Schedule::class, 'created_by');
+    }
+
+    public function createdRoomOverrides(): HasMany
+    {
+        return $this->hasMany(RoomOverride::class, 'created_by');
+    }
+
+    public function updatedRoomOverrides(): HasMany
+    {
+        return $this->hasMany(RoomOverride::class, 'updated_by');
+    }
+
+    public function createdScheduleExceptions(): HasMany
+    {
+        return $this->hasMany(ScheduleException::class, 'created_by');
+    }
+
+    public function updatedScheduleExceptions(): HasMany
+    {
+        return $this->hasMany(ScheduleException::class, 'updated_by');
     }
 }

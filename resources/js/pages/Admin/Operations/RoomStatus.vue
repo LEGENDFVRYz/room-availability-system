@@ -4,11 +4,11 @@ import PillTabs from '@/components/PillTabs.vue';
 import RoomStatusClearModal from './Components/RoomStatusClearModal.vue';
 import RoomStatusViewModal from './Components/RoomStatusViewModal.vue';
 import type { BreadcrumbItem, PageHeader } from '@/types';
-import { Head } from '@inertiajs/vue3';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import { Archive, Building2, CalendarClock, CalendarDays, CheckCircle2, ChevronDown, Clock, Eye, Plus, Power, Search, ShieldAlert, Wrench } from 'lucide-vue-next';
-import { computed, reactive, ref } from 'vue';
+import { computed, ref } from 'vue';
 
-// Types
+// --- Page Types ---
 interface CurrentTerm {
     school_year: string;
     semester_label: string;
@@ -41,22 +41,22 @@ interface RoomOverrideItem {
     updated_by_name?: string | null;
 }
 
-interface RoomStatusForm {
+type RoomStatusForm = {
     room_id: number;
     status: OverrideStatus;
     reason: string;
     starts_at: string;
     ends_at: string;
     indefinite: boolean;
-}
+};
 
 type ModalMode = 'create' | 'view' | 'clear';
 
-// Props and Template Config
+// --- Props Configuration ---
 const props = defineProps<{
     currentTerm: CurrentTerm | null;
-    rooms?: RoomOption[];
-    overrides?: RoomOverrideItem[];
+    rooms: RoomOption[];
+    overrides: RoomOverrideItem[];
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -83,76 +83,18 @@ const overrideTabs: Array<{ label: string; value: OverrideFilter }> = [
 ];
 const overrideStatuses: OverrideStatus[] = ['maintenance', 'unavailable', 'reserved'];
 
-const now = new Date();
-const hour = 60 * 60 * 1000;
-
-function toLocalInputValue(date: Date): string {
+// --- Helper Functions ---
+function toLocalInputValue(dateOrString: Date | string): string {
+    const date = typeof dateOrString === 'string' ? new Date(dateOrString) : dateOrString;
     const timezoneOffset = date.getTimezoneOffset() * 60000;
     return new Date(date.getTime() - timezoneOffset).toISOString().slice(0, 16);
 }
 
-const fallbackRooms: RoomOption[] = [
-    { id: 1, code: 'ROOM 310', name: 'CPE Lecture Room 1', room_type: 'Classroom' },
-    { id: 2, code: 'ROOM 311', name: 'CPE Lecture Room 2', room_type: 'Classroom' },
-    { id: 3, code: 'ROOM 312', name: 'CPE Lecture Room 3', room_type: 'Classroom' },
-    { id: 4, code: 'ROOM 313', name: 'CPE Lecture Room 4', room_type: 'Classroom' },
-];
+function parseDate(value: string): Date {
+    return new Date(value);
+}
 
-const fallbackOverrides: RoomOverrideItem[] = [
-    {
-        id: 1,
-        room_id: 1,
-        room_code: 'ROOM 310',
-        room_name: 'CPE Lecture Room 1',
-        status: 'maintenance',
-        reason: 'Projector replacement and testing.',
-        starts_at: toLocalInputValue(new Date(now.getTime() - hour)),
-        ends_at: toLocalInputValue(new Date(now.getTime() + 3 * hour)),
-        is_active: true,
-        created_by_name: 'Admin',
-    },
-    {
-        id: 2,
-        room_id: 2,
-        room_code: 'ROOM 311',
-        room_name: 'CPE Lecture Room 2',
-        status: 'unavailable',
-        reason: 'Room locked due to key control issue.',
-        starts_at: toLocalInputValue(new Date(now.getTime() - 2 * hour)),
-        ends_at: null,
-        is_active: true,
-        created_by_name: 'Admin',
-    },
-    {
-        id: 3,
-        room_id: 3,
-        room_code: 'ROOM 312',
-        room_name: 'CPE Lecture Room 3',
-        status: 'reserved',
-        reason: 'Faculty meeting.',
-        starts_at: toLocalInputValue(new Date(now.getTime() + 2 * hour)),
-        ends_at: toLocalInputValue(new Date(now.getTime() + 4 * hour)),
-        is_active: true,
-        created_by_name: 'Admin',
-    },
-    {
-        id: 4,
-        room_id: 4,
-        room_code: 'ROOM 313',
-        room_name: 'CPE Lecture Room 4',
-        status: 'maintenance',
-        reason: 'Previous network inspection.',
-        starts_at: toLocalInputValue(new Date(now.getTime() - 48 * hour)),
-        ends_at: toLocalInputValue(new Date(now.getTime() - 46 * hour)),
-        is_active: false,
-        created_by_name: 'Admin',
-        updated_by_name: 'Admin',
-    },
-];
-
-const rooms = computed(() => props.rooms?.length ? props.rooms : fallbackRooms);
-const localOverrides = ref<RoomOverrideItem[]>(props.overrides?.length ? [...props.overrides] : fallbackOverrides);
-
+// --- State Management ---
 const activeTab = ref<OverrideFilter>('all');
 const search = ref('');
 const selectedStatus = ref<'all' | OverrideStatus>('all');
@@ -161,18 +103,15 @@ const activeModal = ref<ModalMode | null>(null);
 const selectedOverride = ref<RoomOverrideItem | null>(null);
 const isDetailsEditing = ref(false);
 
-const form = reactive<RoomStatusForm>({
-    room_id: rooms.value[0]?.id ?? 1,
+// Using Inertia useForm instead of Vue reactive for automated error handling and requests
+const form = useForm<RoomStatusForm>({
+    room_id: props.rooms[0]?.id ?? 1,
     status: 'maintenance',
     reason: '',
     starts_at: toLocalInputValue(new Date()),
     ends_at: '',
     indefinite: false,
 });
-
-function parseDate(value: string): Date {
-    return new Date(value);
-}
 
 function overrideState(item: RoomOverrideItem): OverrideState {
     const current = new Date();
@@ -190,10 +129,11 @@ function overrideState(item: RoomOverrideItem): OverrideState {
     return 'active';
 }
 
+// Directly filtering the props data
 const filteredOverrides = computed(() => {
     const needle = search.value.trim().toLowerCase();
 
-    return localOverrides.value.filter((item) => {
+    return props.overrides.filter((item) => {
         const state = overrideState(item);
         const matchesTab = activeTab.value === 'all'
             ? state !== 'history'
@@ -213,8 +153,8 @@ const filteredOverrides = computed(() => {
 });
 
 const summary = computed(() => {
-    const active = localOverrides.value.filter((item) => overrideState(item) === 'active');
-    const upcoming = localOverrides.value.filter((item) => overrideState(item) === 'upcoming');
+    const active = props.overrides.filter((item) => overrideState(item) === 'active');
+    const upcoming = props.overrides.filter((item) => overrideState(item) === 'upcoming');
 
     return {
         active: active.length,
@@ -224,10 +164,6 @@ const summary = computed(() => {
         reserved: active.filter((item) => item.status === 'reserved').length,
     };
 });
-
-function selectedRoomInfo(roomId: number): RoomOption {
-    return rooms.value.find((room) => room.id === roomId) ?? rooms.value[0];
-}
 
 function formatDateTime(value: string | null): string {
     if (!value) return 'Indefinite';
@@ -242,9 +178,9 @@ function formatDateTime(value: string | null): string {
 
 function durationLabel(item: RoomOverrideItem): string {
     if (!item.ends_at) return 'Until manually cleared';
-
+    
     const diff = parseDate(item.ends_at).getTime() - parseDate(item.starts_at).getTime();
-    const hours = Math.max(Math.round(diff / hour), 1);
+    const hours = Math.max(Math.round(diff / (60 * 60 * 1000)), 1);
 
     return hours === 1 ? '1 hour' : `${hours} hours`;
 }
@@ -282,26 +218,23 @@ function stateLabel(state: OverrideState): string {
 }
 
 function filterLabel(filter: OverrideFilter): string {
-    if (filter === 'all') return 'All';
-
-    return stateLabel(filter);
+    return filter === 'all' ? 'All' : stateLabel(filter);
 }
 
 function filterBadgeClass(filter: OverrideFilter): string {
-    if (filter === 'all') {
-        return 'border-pup-maroon/20 bg-pup-maroon-pale text-pup-maroon';
-    }
-
+    if (filter === 'all') return 'border-pup-maroon/20 bg-pup-maroon-pale text-pup-maroon';
     return stateBadgeClass(filter);
 }
 
+// --- Modal & Form Logic ---
 function resetForm(item?: RoomOverrideItem | null) {
-    form.room_id = item?.room_id ?? rooms.value[0]?.id ?? 1;
+    form.room_id = item?.room_id ?? props.rooms[0]?.id ?? 1;
     form.status = item?.status ?? 'maintenance';
     form.reason = item?.reason ?? '';
-    form.starts_at = item?.starts_at ?? toLocalInputValue(new Date());
-    form.ends_at = item?.ends_at ?? '';
+    form.starts_at = item?.starts_at ? toLocalInputValue(item.starts_at) : toLocalInputValue(new Date());
+    form.ends_at = item?.ends_at ? toLocalInputValue(item.ends_at) : '';
     form.indefinite = item ? !item.ends_at : false;
+    form.clearErrors();
 }
 
 function openCreate() {
@@ -320,7 +253,6 @@ function openView(item: RoomOverrideItem) {
 
 function enableDetailsEdit() {
     if (!selectedOverride.value) return;
-
     resetForm(selectedOverride.value);
     isDetailsEditing.value = true;
 }
@@ -344,56 +276,34 @@ function cancelOrCloseModal() {
         resetForm(selectedOverride.value);
         return;
     }
-
     closeModal();
 }
 
-function saveOverride(formPayload?: RoomStatusForm) {
-    const values = formPayload ?? form;
-    const room = selectedRoomInfo(Number(values.room_id));
-    const payload = {
-        room_id: room.id,
-        room_code: room.code,
-        room_name: room.name,
-        status: values.status,
-        reason: values.reason || null,
-        starts_at: values.starts_at,
-        ends_at: values.indefinite ? null : values.ends_at || null,
-        is_active: true,
-        updated_by_name: 'Admin',
-    };
-
-    if (activeModal.value === 'view' && isDetailsEditing.value && selectedOverride.value) {
-        Object.assign(selectedOverride.value, payload);
-    }
-
+// --- API Actions ---
+function saveOverride() {
     if (activeModal.value === 'create') {
-        localOverrides.value.unshift({
-            id: Date.now(),
-            ...payload,
-            created_by_name: 'Admin',
+        form.post('/admin/operations/room-status', {
+            preserveScroll: true,
+            onSuccess: () => closeModal(),
+        });
+    } else if (activeModal.value === 'view' && isDetailsEditing.value && selectedOverride.value) {
+        form.put(`/admin/operations/room-status/${selectedOverride.value.id}`, {
+            preserveScroll: true,
+            onSuccess: () => closeModal(),
         });
     }
-
-    closeModal();
 }
 
 function clearOverride() {
     if (!selectedOverride.value) return;
 
-    const current = new Date();
-    const startsAt = parseDate(selectedOverride.value.starts_at);
-
-    if (startsAt > current) {
-        selectedOverride.value.is_active = false;
-    } else {
-        selectedOverride.value.ends_at = toLocalInputValue(current);
-    }
-
-    selectedOverride.value.updated_by_name = 'Admin';
-    closeModal();
+    router.post(`/admin/operations/room-status/${selectedOverride.value.id}/clear`, {}, {
+        preserveScroll: true,
+        onSuccess: () => closeModal(),
+    });
 }
 </script>
+
 
 <template>
     <Head title="Room Status" />

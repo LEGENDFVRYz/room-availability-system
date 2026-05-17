@@ -8,7 +8,7 @@ import UserMenuContent from '@/components/UserMenuContent.vue';
 import { getInitials } from '@/composables/useInitials';
 import type { BreadcrumbItem, NavItem, SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { CalendarDays, ClipboardList, LayoutDashboard, Megaphone, Menu, Settings2 } from 'lucide-vue-next';
+import { CalendarDays, ClipboardList, LayoutDashboard, Megaphone, Menu, Settings2, Activity } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 interface Props {
@@ -39,8 +39,9 @@ const isActiveNavItem = (item: NavItem): boolean => {
 
 const adminNavItems: NavItem[] = [
     { title: 'Dashboard', href: '/admin/dashboard/', icon: LayoutDashboard },
-    { title: 'Manages', href: '/admin/manage/', icon: Settings2 },
+    { title: 'Operations', href: '/admin/operations/', icon: Activity },
     { title: 'Schedules', href: '/admin/schedules', icon: CalendarDays },
+    { title: 'Manages', href: '/admin/manage/', icon: Settings2 },
     { title: 'Records', href: '#', icon: ClipboardList },
 ];
 

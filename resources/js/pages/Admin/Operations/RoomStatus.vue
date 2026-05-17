@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import PillTabs from '@/components/PillTabs.vue';
+import RoomStatusClearModal from './Components/RoomStatusClearModal.vue';
+import RoomStatusViewModal from './Components/RoomStatusViewModal.vue';
 import type { BreadcrumbItem, PageHeader } from '@/types';
 import { Head } from '@inertiajs/vue3';
-import {Archive, Building2, CalendarClock, CalendarDays, CheckCircle2, ChevronDown, Clock, Eye, Pencil, Plus, Power, Search, ShieldAlert, Wrench, X } from 'lucide-vue-next';
+import { Archive, Building2, CalendarClock, CalendarDays, CheckCircle2, ChevronDown, Clock, Eye, Plus, Power, Search, ShieldAlert, Wrench } from 'lucide-vue-next';
 import { computed, reactive, ref } from 'vue';
 
 // Types
@@ -37,6 +39,15 @@ interface RoomOverrideItem {
     is_active: boolean;
     created_by_name: string;
     updated_by_name?: string | null;
+}
+
+interface RoomStatusForm {
+    room_id: number;
+    status: OverrideStatus;
+    reason: string;
+    starts_at: string;
+    ends_at: string;
+    indefinite: boolean;
 }
 
 type ModalMode = 'create' | 'view' | 'clear';
@@ -150,9 +161,9 @@ const activeModal = ref<ModalMode | null>(null);
 const selectedOverride = ref<RoomOverrideItem | null>(null);
 const isDetailsEditing = ref(false);
 
-const form = reactive({
+const form = reactive<RoomStatusForm>({
     room_id: rooms.value[0]?.id ?? 1,
-    status: 'maintenance' as OverrideStatus,
+    status: 'maintenance',
     reason: '',
     starts_at: toLocalInputValue(new Date()),
     ends_at: '',
@@ -243,14 +254,6 @@ function statusLabel(status: OverrideStatus): string {
         maintenance: 'Maintenance',
         unavailable: 'Unavailable',
         reserved: 'Reserved',
-    }[status];
-}
-
-function statusDescription(status: OverrideStatus): string {
-    return {
-        maintenance: 'Room is broken, being repaired, cleaned, inspected, or prepared.',
-        unavailable: 'Room is administratively closed, locked, unsafe, or inaccessible.',
-        reserved: 'Room is claimed for a non-class purpose such as a meeting or event.',
     }[status];
 }
 
@@ -345,16 +348,17 @@ function cancelOrCloseModal() {
     closeModal();
 }
 
-function saveOverride() {
-    const room = selectedRoomInfo(Number(form.room_id));
+function saveOverride(formPayload?: RoomStatusForm) {
+    const values = formPayload ?? form;
+    const room = selectedRoomInfo(Number(values.room_id));
     const payload = {
         room_id: room.id,
         room_code: room.code,
         room_name: room.name,
-        status: form.status,
-        reason: form.reason || null,
-        starts_at: form.starts_at,
-        ends_at: form.indefinite ? null : form.ends_at || null,
+        status: values.status,
+        reason: values.reason || null,
+        starts_at: values.starts_at,
+        ends_at: values.indefinite ? null : values.ends_at || null,
         is_active: true,
         updated_by_name: 'Admin',
     };
@@ -616,179 +620,25 @@ function clearOverride() {
         </div>
     </AppLayout>
 
-    <Teleport to="body">
-        <div
-            v-if="activeModal"
-            class="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4 backdrop-blur-[2px]"
-            @click.self="closeModal"
-        >
-            <div class="w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl">
-                <div class="flex items-start justify-between bg-pup-maroon-deep px-6 py-5">
-                    <div>
-                        <h2 class="text-[17px] font-semibold text-white">
-                            <template v-if="activeModal === 'create'">Create Room Override</template>
-                            <template v-else-if="activeModal === 'view' && isDetailsEditing">Edit Room Override</template>
-                            <template v-else-if="activeModal === 'view'">Room Override Details</template>
-                            <template v-else>Clear Room Override</template>
-                        </h2>
-                        <p class="mt-0.5 text-xs text-white/60">
-                            Maintenance, unavailable, and reserved are the only manual room states.
-                        </p>
-                    </div>
-                    <button
-                        type="button"
-                        @click="closeModal"
-                        class="rounded-lg p-1.5 text-white/60 transition hover:bg-white/10 hover:text-white"
-                    >
-                        <X class="h-5 w-5" />
-                    </button>
-                </div>
+    <RoomStatusViewModal
+        v-if="activeModal === 'create' || activeModal === 'view'"
+        :mode="activeModal === 'view' ? 'view' : 'create'"
+        :is-editing="isDetailsEditing"
+        :selected-override="selectedOverride"
+        :rooms="rooms"
+        :form="form"
+        :override-statuses="overrideStatuses"
+        @close="closeModal"
+        @cancel="cancelOrCloseModal"
+        @enable-edit="enableDetailsEdit"
+        @save="saveOverride"
+    />
 
-                <div class="max-h-[70vh] overflow-y-auto px-6 py-5">
-                    <div v-if="activeModal === 'clear'" class="space-y-4">
-                        <div class="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
-                            <div class="flex gap-2">
-                                <ShieldAlert class="mt-0.5 h-4 w-4 shrink-0" />
-                                <p>
-                                    <template v-if="selectedOverride && overrideState(selectedOverride) === 'upcoming'">
-                                        This override has not started yet. Clearing it will deactivate the scheduled override without deleting its history.
-                                    </template>
-                                    <template v-else>
-                                        This override is currently active. Clearing it will end the override now and preserve the completed time window in history.
-                                    </template>
-                                </p>
-                            </div>
-                        </div>
-
-                        <div v-if="selectedOverride" class="rounded-xl border border-gray-100 p-4">
-                            <p class="font-mono text-xs font-semibold text-pup-maroon">{{ selectedOverride.room_code }}</p>
-                            <p class="mt-1 text-sm font-semibold text-gray-900">{{ selectedOverride.room_name }}</p>
-                            <span :class="['mt-3 inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold', statusBadgeClass(selectedOverride.status)]">
-                                {{ statusLabel(selectedOverride.status) }}
-                            </span>
-                            <p class="mt-3 text-sm text-gray-600">{{ selectedOverride.reason || 'No reason provided.' }}</p>
-                        </div>
-                    </div>
-
-                    <div v-else class="space-y-4">
-                        <div>
-                            <label class="mb-1.5 block text-xs font-medium text-gray-600">Room <span v-if="activeModal === 'create' || isDetailsEditing" class="text-red-500">*</span></label>
-                            <div class="relative">
-                                <select
-                                    v-model.number="form.room_id"
-                                    :disabled="activeModal === 'view' && !isDetailsEditing"
-                                    class="h-10 w-full appearance-none rounded-lg border border-gray-200 bg-white px-3 pr-9 text-sm text-gray-700 disabled:bg-gray-50 disabled:text-gray-500 focus:border-pup-maroon/40 focus:outline-none focus:ring-2 focus:ring-pup-maroon/10"
-                                >
-                                    <option v-for="room in rooms" :key="room.id" :value="room.id">{{ room.code }} · {{ room.name }}</option>
-                                </select>
-                                <ChevronDown class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="mb-1.5 block text-xs font-medium text-gray-600">Override Status <span v-if="activeModal === 'create' || isDetailsEditing" class="text-red-500">*</span></label>
-                            <div class="grid gap-3 sm:grid-cols-3">
-                                <button
-                                    v-for="status in overrideStatuses"
-                                    :key="status"
-                                    type="button"
-                                    :disabled="activeModal === 'view' && !isDetailsEditing"
-                                    @click="form.status = status"
-                                    :class="[
-                                        'rounded-xl border p-3 text-left transition disabled:cursor-default',
-                                        form.status === status ? 'border-pup-maroon bg-pup-maroon-pale ring-2 ring-pup-maroon/10' : 'border-gray-200 bg-white hover:bg-gray-50',
-                                    ]"
-                                >
-                                    <span :class="['inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold', statusBadgeClass(status)]">
-                                        {{ statusLabel(status) }}
-                                    </span>
-                                    <p class="mt-2 text-[11px] leading-relaxed text-gray-500">{{ statusDescription(status) }}</p>
-                                </button>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="mb-1.5 block text-xs font-medium text-gray-600">Reason</label>
-                            <textarea
-                                v-model="form.reason"
-                                :disabled="activeModal === 'view' && !isDetailsEditing"
-                                rows="4"
-                                placeholder="e.g. Projector repair, room locked, faculty meeting"
-                                class="w-full rounded-lg border border-gray-200 bg-gray-50/50 px-3 py-2 text-sm text-gray-800 placeholder-gray-400 disabled:bg-gray-50 disabled:text-gray-500 focus:border-pup-maroon/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-pup-maroon/10"
-                            />
-                        </div>
-
-                        <div class="grid gap-3 sm:grid-cols-2">
-                            <div>
-                                <label class="mb-1.5 block text-xs font-medium text-gray-600">Starts At <span v-if="activeModal === 'create' || isDetailsEditing" class="text-red-500">*</span></label>
-                                <input
-                                    v-model="form.starts_at"
-                                    :disabled="activeModal === 'view' && !isDetailsEditing"
-                                    type="datetime-local"
-                                    class="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 disabled:bg-gray-50 disabled:text-gray-500 focus:border-pup-maroon/40 focus:outline-none focus:ring-2 focus:ring-pup-maroon/10"
-                                />
-                            </div>
-                            <div>
-                                <label class="mb-1.5 block text-xs font-medium text-gray-600">Ends At</label>
-                                <input
-                                    v-model="form.ends_at"
-                                    :disabled="(activeModal === 'view' && !isDetailsEditing) || form.indefinite"
-                                    type="datetime-local"
-                                    class="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 disabled:bg-gray-50 disabled:text-gray-500 focus:border-pup-maroon/40 focus:outline-none focus:ring-2 focus:ring-pup-maroon/10"
-                                />
-                            </div>
-                        </div>
-
-                        <label class="flex cursor-pointer items-center gap-2.5 rounded-lg border border-gray-200 bg-gray-50/60 px-3 py-2.5">
-                            <input
-                                v-model="form.indefinite"
-                                :disabled="activeModal === 'view' && !isDetailsEditing"
-                                type="checkbox"
-                                class="h-4 w-4 rounded border-gray-300 text-pup-maroon focus:ring-pup-maroon/30"
-                            />
-                            <span class="text-sm font-medium text-gray-700">Indefinite override until manually cleared</span>
-                        </label>
-                    </div>
-                </div>
-
-                <div class="flex items-center justify-end gap-2 border-t border-gray-100 px-6 py-4">
-                    <button
-                        type="button"
-                        @click="cancelOrCloseModal"
-                        class="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-50"
-                    >
-                        {{ activeModal === 'view' && !isDetailsEditing ? 'Close' : activeModal === 'view' && isDetailsEditing ? 'Cancel Edit' : 'Cancel' }}
-                    </button>
-
-                    <button
-                        v-if="activeModal === 'view' && !isDetailsEditing && selectedOverride && overrideState(selectedOverride) !== 'history'"
-                        type="button"
-                        @click="enableDetailsEdit"
-                        class="inline-flex items-center gap-1.5 rounded-lg bg-pup-maroon text-white px-4 py-2 text-sm font-medium transition hover:bg-pup-maroon-pale"
-                    >
-                        <Pencil class="h-4 w-4" />
-                        Edit Details
-                    </button>
-
-                    <button
-                        v-if="activeModal === 'create' || (activeModal === 'view' && isDetailsEditing)"
-                        type="button"
-                        @click="saveOverride"
-                        class="rounded-lg bg-pup-maroon px-5 py-2 text-sm font-medium text-white transition hover:bg-pup-maroon-light"
-                    >
-                        {{ activeModal === 'create' ? 'Save Preview' : 'Save Changes' }}
-                    </button>
-
-                    <button
-                        v-if="activeModal === 'clear'"
-                        type="button"
-                        @click="clearOverride"
-                        class="rounded-lg bg-red-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-red-700"
-                    >
-                        Clear Override
-                    </button>
-                </div>
-            </div>
-        </div>
-    </Teleport>
+    <RoomStatusClearModal
+        v-if="activeModal === 'clear'"
+        :selected-override="selectedOverride"
+        @close="closeModal"
+        @cancel="closeModal"
+        @confirm="clearOverride"
+    />
 </template>

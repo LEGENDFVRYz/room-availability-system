@@ -21,8 +21,8 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const pageheader: PageHeader = {
-    title: 'Manage Config',
-    desc: 'System and academic configuration · CPE Department',
+    title: 'Manage System Config',
+    desc: 'Configure active academic terms, school years, and global system parameters.',
 };
 
 const manageTabs = [

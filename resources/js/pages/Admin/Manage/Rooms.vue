@@ -18,7 +18,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const pageheader: PageHeader = {
     title: 'Manage Rooms',
-    desc: 'View and manage department rooms · CPE Department',
+    desc: 'Manage physical room identities, types, and base configurations.',
 };
 
 const manageTabs = [

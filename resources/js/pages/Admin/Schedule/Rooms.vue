@@ -37,7 +37,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const pageheader: PageHeader = {
     title: 'Schedules',
-    desc: 'Manage class schedules for all batches · CPE Department',
+    desc: 'Manage the regular weekly class schedules for the academic term.',
 };
 
 const scheduleTabs = [

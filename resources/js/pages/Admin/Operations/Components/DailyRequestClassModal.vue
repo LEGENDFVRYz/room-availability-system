@@ -14,6 +14,11 @@ const emit = defineEmits<{
     save: [payload: ClassRequestPayload];
 }>();
 
+const labelClass = 'flex flex-col gap-1.5 text-sm font-semibold text-gray-600';
+const inputClass = 'h-11 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-800 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-pup-maroon focus:ring-2 focus:ring-pup-maroon/15';
+const selectClass = 'h-11 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-800 shadow-sm outline-none transition focus:border-pup-maroon focus:ring-2 focus:ring-pup-maroon/15';
+const textareaClass = 'min-h-[92px] resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-800 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-pup-maroon focus:ring-2 focus:ring-pup-maroon/15';
+
 const classForm = reactive<ClassRequestPayload>({
     event_type: 'special_class',
     room_id: null,
@@ -57,8 +62,9 @@ watch(
 </script>
 
 <template>
-    <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-        <div class="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+    <Teleport to="body">
+        <div v-if="show" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
+            <div class="max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col">
             <div class="flex items-start justify-between border-b border-gray-200 px-6 py-4">
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-wide text-pup-maroon">Daily operation</p>
@@ -72,7 +78,7 @@ watch(
                 </button>
             </div>
 
-            <div class="grid gap-4 px-6 py-5 sm:grid-cols-2">
+            <div class="grid flex-1 gap-4 overflow-y-auto px-6 py-5 sm:grid-cols-2">
                 <div class="sm:col-span-2">
                     <p class="text-sm font-semibold text-gray-700">Request type</p>
                     <div class="mt-2 grid gap-3 sm:grid-cols-2">
@@ -110,57 +116,57 @@ watch(
                     </div>
                 </div>
 
-                <label class="flex flex-col gap-1 text-sm font-medium text-gray-600">
+                <label :class="labelClass">
                     Room
-                    <select v-model="classForm.room_id" class="rounded-lg border-gray-200 text-sm focus:border-pup-maroon focus:ring-pup-maroon">
+                    <select v-model="classForm.room_id" :class="selectClass">
                         <option v-for="room in rooms" :key="room.id" :value="room.id">
                             {{ room.code }} · {{ room.name }}
                         </option>
                     </select>
                 </label>
 
-                <label class="flex flex-col gap-1 text-sm font-medium text-gray-600">
+                <label :class="labelClass">
                     Section
-                    <input v-model="classForm.section" type="text" class="rounded-lg border-gray-200 text-sm focus:border-pup-maroon focus:ring-pup-maroon" placeholder="BSCPE 4-2" />
+                    <input v-model="classForm.section" type="text" :class="inputClass" placeholder="BSCPE 4-2" />
                 </label>
 
-                <label class="flex flex-col gap-1 text-sm font-medium text-gray-600">
+                <label :class="labelClass">
                     Subject code
-                    <input v-model="classForm.subject_code" type="text" class="rounded-lg border-gray-200 text-sm focus:border-pup-maroon focus:ring-pup-maroon" placeholder="CMPE 499" />
+                    <input v-model="classForm.subject_code" type="text" :class="inputClass" placeholder="CMPE 499" />
                 </label>
 
-                <label class="flex flex-col gap-1 text-sm font-medium text-gray-600">
+                <label :class="labelClass">
                     Subject title
-                    <input v-model="classForm.subject_title" type="text" class="rounded-lg border-gray-200 text-sm focus:border-pup-maroon focus:ring-pup-maroon" placeholder="Capstone Consultation" />
+                    <input v-model="classForm.subject_title" type="text" :class="inputClass" placeholder="Capstone Consultation" />
                 </label>
 
-                <label class="flex flex-col gap-1 text-sm font-medium text-gray-600">
+                <label :class="labelClass">
                     Start time
-                    <input v-model="classForm.start_time" type="time" class="rounded-lg border-gray-200 text-sm focus:border-pup-maroon focus:ring-pup-maroon" />
+                    <input v-model="classForm.start_time" type="time" :class="inputClass" />
                 </label>
 
-                <label class="flex flex-col gap-1 text-sm font-medium text-gray-600">
+                <label :class="labelClass">
                     End time
-                    <input v-model="classForm.end_time" type="time" class="rounded-lg border-gray-200 text-sm focus:border-pup-maroon focus:ring-pup-maroon" />
+                    <input v-model="classForm.end_time" type="time" :class="inputClass" />
                 </label>
 
-                <label class="flex flex-col gap-1 text-sm font-medium text-gray-600 sm:col-span-2">
+                <label :class="[labelClass, 'sm:col-span-2']">
                     Instructor
-                    <input v-model="classForm.instructor_name" type="text" class="rounded-lg border-gray-200 text-sm focus:border-pup-maroon focus:ring-pup-maroon" placeholder="Instructor name" />
+                    <input v-model="classForm.instructor_name" type="text" :class="inputClass" placeholder="Instructor name" />
                 </label>
 
-                <label class="flex flex-col gap-1 text-sm font-medium text-gray-600 sm:col-span-2">
+                <label :class="[labelClass, 'sm:col-span-2']">
                     Reason / note
                     <textarea
                         v-model="classForm.reason"
                         rows="3"
-                        class="rounded-lg border-gray-200 text-sm focus:border-pup-maroon focus:ring-pup-maroon"
+                        :class="textareaClass"
                         :placeholder="classForm.event_type === 'special_class' ? 'Optional reason for this special class' : 'Optional reason for this makeup class'"
                     />
                 </label>
             </div>
 
-            <div class="flex justify-end gap-2 border-t border-gray-200 bg-gray-50 px-6 py-4">
+            <div class="flex shrink-0 justify-end gap-2 border-t border-gray-200 bg-gray-50 px-6 py-4">
                 <button type="button" @click="closeModal" class="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-white">
                     Cancel
                 </button>
@@ -169,5 +175,6 @@ watch(
                 </button>
             </div>
         </div>
-    </div>
+        </div>
+    </Teleport>
 </template>

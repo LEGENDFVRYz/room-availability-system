@@ -281,8 +281,9 @@ function applyAction() {
 </script>
 
 <template>
-    <div v-if="slot" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-        <div class="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+    <Teleport to="body">
+        <div v-if="slot" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
+            <div class="max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col">
             <div class="flex items-start justify-between border-b border-gray-200 px-6 py-4">
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-wide text-pup-maroon">Schedule item</p>
@@ -294,7 +295,7 @@ function applyAction() {
                 </button>
             </div>
 
-            <div class="space-y-5 px-6 py-5">
+            <div class="flex-1 space-y-5 overflow-y-auto px-6 py-5">
                 <div class="grid gap-3 sm:grid-cols-2">
                     <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
                         <p class="text-xs font-semibold uppercase text-gray-400">Room</p>
@@ -423,5 +424,6 @@ function applyAction() {
                 </div>
             </div>
         </div>
-    </div>
+        </div>
+    </Teleport>
 </template>

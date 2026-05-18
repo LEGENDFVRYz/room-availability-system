@@ -54,7 +54,7 @@ function onDateInput(event: Event) {
 </script>
 
 <template>
-    <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm" @click="isRoomFilterOpen = false">
+    <div class="relative z-[70] rounded-xl border border-gray-200 bg-white p-4 shadow-sm" @click="isRoomFilterOpen = false">
         <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div class="grid flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <label class="flex flex-col gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -81,7 +81,7 @@ function onDateInput(event: Event) {
 
                     <div
                         v-if="isRoomFilterOpen"
-                        class="absolute left-0 top-full z-30 mt-2 w-full min-w-[260px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
+                        class="absolute left-0 top-full z-[90] mt-2 w-full min-w-[280px] overflow-hidden rounded-xl border border-pup-maroon/15 bg-white shadow-2xl ring-1 ring-black/5"
                         @click.stop
                     >
                         <div class="flex items-center justify-between border-b border-gray-100 px-3 py-2">
@@ -94,7 +94,7 @@ function onDateInput(event: Event) {
                                 All rooms
                             </button>
                         </div>
-                        <div class="max-h-64 overflow-y-auto p-1.5">
+                        <div class="max-h-64 overflow-y-auto p-1.5 [scrollbar-color:theme(colors.pup.gray-400)_transparent]">
                             <button
                                 v-for="room in rooms"
                                 :key="room.id"

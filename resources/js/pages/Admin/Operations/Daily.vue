@@ -3,7 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import PillTabs from '@/components/PillTabs.vue';
 import type { BreadcrumbItem, PageHeader } from '@/types';
 import { Head, router, usePage } from '@inertiajs/vue3';
-import { AlertCircle, CalendarDays, Clock3, ClipboardPlus, RefreshCw, School } from 'lucide-vue-next';
+import { AlertCircle, CalendarDays, Clock3, Plus, RefreshCw, School } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import DailyFilters from './Components/DailyFilters.vue';
 import DailyRequestClassModal from './Components/DailyRequestClassModal.vue';

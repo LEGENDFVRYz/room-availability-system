@@ -3,491 +3,185 @@
 namespace Database\Seeders;
 
 use App\Enums\DayOfWeek;
+use App\Enums\RoomType;
+use App\Enums\Semester;
 use App\Models\AcademicTerm;
 use App\Models\Room;
 use App\Models\Schedule;
+use App\Models\User;
+use DateTimeImmutable;
 use Illuminate\Database\Seeder;
+use RuntimeException;
+use SplFileObject;
 
 class ScheduleSeeder extends Seeder
 {
+    private const CSV_PATH = 'seeders/data/cpe_schedules_2025_second_semester.csv';
+
     public function run(): void
     {
-        $term    = AcademicTerm::where('is_current', true)->firstOrFail();
-        $adminId = 1;
-        
-        // Key by name
-        $rooms = Room::pluck('id', 'name');
+        $csvPath = database_path(self::CSV_PATH);
 
-        // ------------------------------------------------------------
-        // 6 sections across 4 year levels — demonstration data
-        // ------------------------------------------------------------
-        $schedules = [
+        if (! is_file($csvPath)) {
+            throw new RuntimeException("Schedule CSV not found at: {$csvPath}");
+        }
 
-            // BSCPE 1-1 (1st Year)
-            [
-                'room_name'       => 'CPE Lecture Room 1',
-                'subject_code'    => 'GEED 101',
-                'subject_title'   => 'Understanding the Self',
-                'section'         => 'BSCPE 1-1',
-                'instructor_name' => 'Prof. Santos',
-                'day_of_week'     => DayOfWeek::Monday,
-                'start_time'      => '07:30:00',
-                'end_time'        => '09:00:00',
-            ],
-            [
-                'room_name'       => 'CPE Lecture Room 1',
-                'subject_code'    => 'MATH 101',
-                'subject_title'   => 'Calculus 1',
-                'section'         => 'BSCPE 1-1',
-                'instructor_name' => 'Prof. Reyes',
-                'day_of_week'     => DayOfWeek::Tuesday,
-                'start_time'      => '07:30:00',
-                'end_time'        => '09:00:00',
-            ],
-            [
-                'room_name'       => 'CPE Lecture Room 1',
-                'subject_code'    => 'MATH 101',
-                'subject_title'   => 'Calculus 1',
-                'section'         => 'BSCPE 1-1',
-                'instructor_name' => 'Prof. Reyes',
-                'day_of_week'     => DayOfWeek::Thursday,
-                'start_time'      => '07:30:00',
-                'end_time'        => '09:00:00',
-            ],
-            [
-                'room_name'       => 'CPE Lecture Room 2',
-                'subject_code'    => 'PHYS 101',
-                'subject_title'   => 'Physics for Engineers',
-                'section'         => 'BSCPE 1-1',
-                'instructor_name' => 'Prof. Bautista',
-                'day_of_week'     => DayOfWeek::Wednesday,
-                'start_time'      => '09:00:00',
-                'end_time'        => '10:30:00',
-            ],
-            [
-                'room_name'       => 'CPE Laboratory 1',
-                'subject_code'    => 'CMPE 101',
-                'subject_title'   => 'Introduction to Computing',
-                'section'         => 'BSCPE 1-1',
-                'instructor_name' => 'Prof. Cruz',
-                'day_of_week'     => DayOfWeek::Friday,
-                'start_time'      => '13:00:00',
-                'end_time'        => '16:00:00',
-            ],
-            [
-                'room_name'       => 'CPE Lecture Room 2',
-                'subject_code'    => 'GEED 102',
-                'subject_title'   => 'Readings in Philippine History',
-                'section'         => 'BSCPE 1-1',
-                'instructor_name' => 'Prof. Torres',
-                'day_of_week'     => DayOfWeek::Saturday,
-                'start_time'      => '07:30:00',
-                'end_time'        => '09:00:00',
-            ],
+        $term = AcademicTerm::query()
+            ->where('year_start', 2025)
+            ->where('semester', Semester::Second->value)
+            ->firstOrFail();
 
-            // BSCPE 2-1 (2nd Year, Section 1) 
-            [
-                'room_name'       => 'CPE Laboratory 1',
-                'subject_code'    => 'CMPE 201',
-                'subject_title'   => 'Computer Programming 2',
-                'section'         => 'BSCPE 2-1',
-                'instructor_name' => 'Prof. Garcia',
-                'day_of_week'     => DayOfWeek::Monday,
-                'start_time'      => '07:30:00',
-                'end_time'        => '10:30:00',
-            ],
-            [
-                'room_name'       => 'CPE Laboratory 2',
-                'subject_code'    => 'CMPE 202',
-                'subject_title'   => 'Data Structures and Algorithms',
-                'section'         => 'BSCPE 2-1',
-                'instructor_name' => 'Prof. Lim',
-                'day_of_week'     => DayOfWeek::Tuesday,
-                'start_time'      => '13:00:00',
-                'end_time'        => '16:00:00',
-            ],
-            [
-                'room_name'       => 'CPE Lecture Room 1',
-                'subject_code'    => 'MATH 201',
-                'subject_title'   => 'Differential Equations',
-                'section'         => 'BSCPE 2-1',
-                'instructor_name' => 'Prof. Navarro',
-                'day_of_week'     => DayOfWeek::Wednesday,
-                'start_time'      => '09:00:00',
-                'end_time'        => '10:30:00',
-            ],
-            [
-                'room_name'       => 'CPE Lecture Room 2',
-                'subject_code'    => 'CMPE 203',
-                'subject_title'   => 'Logic Circuits and Switching Theory',
-                'section'         => 'BSCPE 2-1',
-                'instructor_name' => 'Prof. Villanueva',
-                'day_of_week'     => DayOfWeek::Thursday,
-                'start_time'      => '09:00:00',
-                'end_time'        => '10:30:00',
-            ],
-            [
-                'room_name'       => 'CPE Laboratory 2',
-                'subject_code'    => 'CMPE 203L',
-                'subject_title'   => 'Logic Circuits Lab',
-                'section'         => 'BSCPE 2-1',
-                'instructor_name' => 'Prof. Villanueva',
-                'day_of_week'     => DayOfWeek::Friday,
-                'start_time'      => '07:30:00',
-                'end_time'        => '10:30:00',
-            ],
-            [
-                'room_name'       => 'CPE Lecture Room 1',
-                'subject_code'    => 'ENGG 201',
-                'subject_title'   => 'Engineering Economics',
-                'section'         => 'BSCPE 2-1',
-                'instructor_name' => 'Prof. Aquino',
-                'day_of_week'     => DayOfWeek::Saturday,
-                'start_time'      => '09:00:00',
-                'end_time'        => '10:30:00',
-            ],
+        $adminId = User::query()->where('email', 'admin@example.com')->value('id')
+            ?? User::query()->value('id')
+            ?? 1;
 
-            // BSCPE 2-2 (2nd Year, Section 2) 
-            [
-                'room_name'       => 'CPE Laboratory 1',
-                'subject_code'    => 'CMPE 201',
-                'subject_title'   => 'Computer Programming 2',
-                'section'         => 'BSCPE 2-2',
-                'instructor_name' => 'Prof. Garcia',
-                'day_of_week'     => DayOfWeek::Tuesday,
-                'start_time'      => '10:30:00',
-                'end_time'        => '13:30:00',
-            ],
-            [
-                'room_name'       => 'CPE Laboratory 3',
-                'subject_code'    => 'CMPE 202',
-                'subject_title'   => 'Data Structures and Algorithms',
-                'section'         => 'BSCPE 2-2',
-                'instructor_name' => 'Prof. Lim',
-                'day_of_week'     => DayOfWeek::Monday,
-                'start_time'      => '13:30:00',
-                'end_time'        => '16:30:00',
-            ],
-            [
-                'room_name'       => 'CPE Lecture Room 2',
-                'subject_code'    => 'MATH 201',
-                'subject_title'   => 'Differential Equations',
-                'section'         => 'BSCPE 2-2',
-                'instructor_name' => 'Prof. Navarro',
-                'day_of_week'     => DayOfWeek::Wednesday,
-                'start_time'      => '10:30:00',
-                'end_time'        => '12:00:00',
-            ],
-            [
-                'room_name'       => 'CPE Lecture Room 1',
-                'subject_code'    => 'CMPE 203',
-                'subject_title'   => 'Logic Circuits and Switching Theory',
-                'section'         => 'BSCPE 2-2',
-                'instructor_name' => 'Prof. Villanueva',
-                'day_of_week'     => DayOfWeek::Thursday,
-                'start_time'      => '13:30:00',
-                'end_time'        => '15:00:00',
-            ],
-            [
-                'room_name'       => 'CPE Laboratory 3',
-                'subject_code'    => 'CMPE 203L',
-                'subject_title'   => 'Logic Circuits Lab',
-                'section'         => 'BSCPE 2-2',
-                'instructor_name' => 'Prof. Villanueva',
-                'day_of_week'     => DayOfWeek::Saturday,
-                'start_time'      => '07:30:00',
-                'end_time'        => '10:30:00',
-            ],
-            [
-                'room_name'       => 'CPE Lecture Room 2',
-                'subject_code'    => 'ENGG 201',
-                'subject_title'   => 'Engineering Economics',
-                'section'         => 'BSCPE 2-2',
-                'instructor_name' => 'Prof. Aquino',
-                'day_of_week'     => DayOfWeek::Friday,
-                'start_time'      => '09:00:00',
-                'end_time'        => '10:30:00',
-            ],
+        Schedule::query()
+            ->where('academic_term_id', $term->id)
+            ->update([
+                'is_active'  => false,
+                'updated_by' => $adminId,
+            ]);
 
-            // BSCPE 3-1 (3rd Year) 
-            [
-                'room_name'       => 'CPE Laboratory 2',
-                'subject_code'    => 'CMPE 301',
-                'subject_title'   => 'Embedded Systems',
-                'section'         => 'BSCPE 3-1',
-                'instructor_name' => 'Prof. Dela Cruz',
-                'day_of_week'     => DayOfWeek::Monday,
-                'start_time'      => '10:30:00',
-                'end_time'        => '13:30:00',
-            ],
-            [
-                'room_name'       => 'CPE Lecture Room 2',
-                'subject_code'    => 'CMPE 302',
-                'subject_title'   => 'Computer Organization and Architecture',
-                'section'         => 'BSCPE 3-1',
-                'instructor_name' => 'Prof. Fernandez',
-                'day_of_week'     => DayOfWeek::Tuesday,
-                'start_time'      => '07:30:00',
-                'end_time'        => '09:00:00',
-            ],
-            [
-                'room_name'       => 'CPE Lecture Room 2',
-                'subject_code'    => 'CMPE 302',
-                'subject_title'   => 'Computer Organization and Architecture',
-                'section'         => 'BSCPE 3-1',
-                'instructor_name' => 'Prof. Fernandez',
-                'day_of_week'     => DayOfWeek::Wednesday,
-                'start_time'      => '07:30:00',
-                'end_time'        => '09:00:00',
-            ],
-            [
-                'room_name'       => 'CPE Laboratory 3',
-                'subject_code'    => 'CMPE 303',
-                'subject_title'   => 'Digital Signal Processing',
-                'section'         => 'BSCPE 3-1',
-                'instructor_name' => 'Prof. Mendoza',
-                'day_of_week'     => DayOfWeek::Thursday,
-                'start_time'      => '13:00:00',
-                'end_time'        => '16:00:00',
-            ],
-            [
-                'room_name'       => 'CPE Lecture Room 1',
-                'subject_code'    => 'ENGG 301',
-                'subject_title'   => 'Engineering Ethics',
-                'section'         => 'BSCPE 3-1',
-                'instructor_name' => 'Prof. Castillo',
-                'day_of_week'     => DayOfWeek::Wednesday,
-                'start_time'      => '10:30:00',
-                'end_time'        => '12:00:00',
-            ],
-            [
-                'room_name'       => 'CPE Laboratory 1',
-                'subject_code'    => 'CMPE 304',
-                'subject_title'   => 'Operating Systems',
-                'section'         => 'BSCPE 3-1',
-                'instructor_name' => 'Prof. Ramos',
-                'day_of_week'     => DayOfWeek::Friday,
-                'start_time'      => '10:30:00',
-                'end_time'        => '13:30:00',
-            ],
+        foreach ($this->readCsv($csvPath) as $row) {
+            $day       = $this->dayOfWeek($row['day']);
+            $roomCode  = trim($row['room_code']);
+            $startTime = $this->normalizeTime($row['start_time']);
+            $endTime   = $this->normalizeTime($row['end_time']);
 
-            // BSCPE 4-2 (4th Year, Section 2)
-            [
-                'room_name'       => 'CPE Lecture Room 2',
-                'subject_code'    => 'CMPE 401',
-                'subject_title'   => 'CPE Practice and Design 1',
-                'section'         => 'BSCPE 4-2',
-                'instructor_name' => 'Prof. Aguilar',
-                'day_of_week'     => DayOfWeek::Tuesday,
-                'start_time'      => '07:30:00',
-                'end_time'        => '09:00:00',
-            ],
-            [
-                'room_name'       => 'CPE Lecture Room 2',
-                'subject_code'    => 'CMPE 401',
-                'subject_title'   => 'CPE Practice and Design 1',
-                'section'         => 'BSCPE 4-2',
-                'instructor_name' => 'Prof. Aguilar',
-                'day_of_week'     => DayOfWeek::Thursday,
-                'start_time'      => '07:30:00',
-                'end_time'        => '09:00:00',
-            ],
-            [
-                'room_name'       => 'CPE Lecture Room 1',
-                'subject_code'    => 'CMPE 403',
-                'subject_title'   => 'Field Trip and Seminars',
-                'section'         => 'BSCPE 4-2',
-                'instructor_name' => 'Prof. Soriano',
-                'day_of_week'     => DayOfWeek::Monday,
-                'start_time'      => '09:00:00',
-                'end_time'        => '10:30:00',
-            ],
-            [
-                'room_name'       => 'CPE Lecture Room 1',
-                'subject_code'    => 'CMPE 403',
-                'subject_title'   => 'Field Trip and Seminars',
-                'section'         => 'BSCPE 4-2',
-                'instructor_name' => 'Prof. Soriano',
-                'day_of_week'     => DayOfWeek::Wednesday,
-                'start_time'      => '09:00:00',
-                'end_time'        => '10:30:00',
-            ],
-            [
-                'room_name'       => 'CPE Laboratory 3',
-                'subject_code'    => 'CMPE 404',
-                'subject_title'   => 'Secure Data Management',
-                'section'         => 'BSCPE 4-2',
-                'instructor_name' => 'Prof. Velasco',
-                'day_of_week'     => DayOfWeek::Friday,
-                'start_time'      => '13:00:00',
-                'end_time'        => '16:00:00',
-            ],
-            [
-                'room_name'       => 'CPE Lecture Room 1',
-                'subject_code'    => 'CMPE 405',
-                'subject_title'   => 'Emerging Technologies in Computer Engineering',
-                'section'         => 'BSCPE 4-2',
-                'instructor_name' => 'Prof. Pascual',
-                'day_of_week'     => DayOfWeek::Saturday,
-                'start_time'      => '10:30:00',
-                'end_time'        => '13:30:00',
-            ],
+            $room = Room::query()->firstOrCreate(
+                ['code' => $roomCode],
+                [
+                    'name'          => $roomCode,
+                    'room_type'     => RoomType::Classroom,
+                    'floor'         => $this->roomFloor($roomCode),
+                    'capacity'      => 40,
+                    'display_order' => $this->roomDisplayOrder($roomCode),
+                    'is_active'     => true,
+                    'created_by'    => $adminId,
+                    'updated_by'    => $adminId,
+                ]
+            );
 
-            // BSCPE 4-3 (4th Year, Section 3) — mirrors reference image 
-            [
-                'room_name'       => 'CPE Laboratory 3',
-                'subject_code'    => 'CMPE 402',
-                'subject_title'   => 'CPE Practice and Design 2',
-                'section'         => 'BSCPE 4-3',
-                'instructor_name' => 'Prof. Aguilar',
-                'day_of_week'     => DayOfWeek::Tuesday,
-                'start_time'      => '07:30:00',
-                'end_time'        => '09:00:00',
-            ],
-            [
-                'room_name'       => 'CPE Laboratory 3',
-                'subject_code'    => 'CMPE 402',
-                'subject_title'   => 'CPE Practice and Design 2',
-                'section'         => 'BSCPE 4-3',
-                'instructor_name' => 'Prof. Aguilar',
-                'day_of_week'     => DayOfWeek::Thursday,
-                'start_time'      => '07:30:00',
-                'end_time'        => '09:00:00',
-            ],
-            [
-                'room_name'       => 'CPE Lecture Room 1',
-                'subject_code'    => 'CMPE 403',
-                'subject_title'   => 'Field Trip and Seminars',
-                'section'         => 'BSCPE 4-3',
-                'instructor_name' => 'Prof. Soriano',
-                'day_of_week'     => DayOfWeek::Wednesday,
-                'start_time'      => '07:30:00',
-                'end_time'        => '09:00:00',
-            ],
-            [
-                'room_name'       => 'CPE Lecture Room 1',
-                'subject_code'    => 'CMPE 403',
-                'subject_title'   => 'Field Trip and Seminars',
-                'section'         => 'BSCPE 4-3',
-                'instructor_name' => 'Prof. Soriano',
-                'day_of_week'     => DayOfWeek::Friday,
-                'start_time'      => '07:30:00',
-                'end_time'        => '09:00:00',
-            ],
-            [
-                'room_name'       => 'CPE Lecture Room 2',
-                'subject_code'    => 'CMPE 406',
-                'subject_title'   => 'Software Design',
-                'section'         => 'BSCPE 4-3',
-                'instructor_name' => 'Prof. Reyes',
-                'day_of_week'     => DayOfWeek::Tuesday,
-                'start_time'      => '10:30:00',
-                'end_time'        => '13:30:00',
-            ],
-            [
-                'room_name'       => 'CPE Lecture Room 1',
-                'subject_code'    => 'GEED 201',
-                'subject_title'   => 'Gender and Society',
-                'section'         => 'BSCPE 4-3',
-                'instructor_name' => 'Prof. Santos',
-                'day_of_week'     => DayOfWeek::Wednesday,
-                'start_time'      => '10:30:00',
-                'end_time'        => '13:30:00',
-            ],
-            [
-                'room_name'       => 'CPE Lecture Room 2',
-                'subject_code'    => 'GEED 202',
-                'subject_title'   => 'Ethics and Governance',
-                'section'         => 'BSCPE 4-3',
-                'instructor_name' => 'Prof. Torres',
-                'day_of_week'     => DayOfWeek::Thursday,
-                'start_time'      => '10:30:00',
-                'end_time'        => '13:30:00',
-            ],
-            [
-                'room_name'       => 'CPE Laboratory 1',
-                'subject_code'    => 'CMPE 404',
-                'subject_title'   => 'Secure Data Management',
-                'section'         => 'BSCPE 4-3',
-                'instructor_name' => 'Prof. Velasco',
-                'day_of_week'     => DayOfWeek::Thursday,
-                'start_time'      => '14:30:00',
-                'end_time'        => '16:30:00',
-            ],
-            [
-                'room_name'       => 'CPE Laboratory 1',
-                'subject_code'    => 'CMPE 404',
-                'subject_title'   => 'Secure Data Management',
-                'section'         => 'BSCPE 4-3',
-                'instructor_name' => 'Prof. Velasco',
-                'day_of_week'     => DayOfWeek::Thursday,
-                'start_time'      => '18:00:00',
-                'end_time'        => '21:00:00',
-            ],
-            [
-                'room_name'       => 'CPE Laboratory 2',
-                'subject_code'    => 'CMPE 301',
-                'subject_title'   => 'Embedded Systems',
-                'section'         => 'BSCPE 4-3',
-                'instructor_name' => 'Prof. Dela Cruz',
-                'day_of_week'     => DayOfWeek::Friday,
-                'start_time'      => '15:00:00',
-                'end_time'        => '18:00:00',
-            ],
-            [
-                'room_name'       => 'CPE Laboratory 2',
-                'subject_code'    => 'CMPE 301',
-                'subject_title'   => 'Embedded Systems',
-                'section'         => 'BSCPE 4-3',
-                'instructor_name' => 'Prof. Dela Cruz',
-                'day_of_week'     => DayOfWeek::Friday,
-                'start_time'      => '18:00:00',
-                'end_time'        => '21:00:00',
-            ],
-            [
-                'room_name'       => 'CPE Lecture Room 2',
-                'subject_code'    => 'CMPE 405',
-                'subject_title'   => 'Emerging Technologies in Computer Engineering',
-                'section'         => 'BSCPE 4-3',
-                'instructor_name' => 'Prof. Pascual',
-                'day_of_week'     => DayOfWeek::Saturday,
-                'start_time'      => '13:30:00',
-                'end_time'        => '16:30:00',
-            ],
-            [
-                'room_name'       => 'CPE Laboratory 3',
-                'subject_code'    => 'CMPE 402',
-                'subject_title'   => 'CPE Practice and Design 2',
-                'section'         => 'BSCPE 4-3',
-                'instructor_name' => 'Prof. Aguilar',
-                'day_of_week'     => DayOfWeek::Saturday,
-                'start_time'      => '18:00:00',
-                'end_time'        => '21:00:00',
-            ],
-        ];
+            Schedule::query()->updateOrCreate(
+                [
+                    'academic_term_id' => $term->id,
+                    'room_id'          => $room->id,
+                    'subject_code'     => trim($row['subject_code']),
+                    'section'          => trim($row['section']),
+                    'day_of_week'      => $day->value,
+                    'start_time'       => $startTime,
+                    'end_time'         => $endTime,
+                ],
+                [
+                    'subject_title'   => trim($row['subject_title']),
+                    'instructor_name' => trim($row['instructor_name']) ?: 'TBA',
+                    'is_active'       => true,
+                    'created_by'      => $adminId,
+                    'updated_by'      => $adminId,
+                ]
+            );
+        }
+    }
 
-        foreach ($schedules as $data) {
-            $roomId = $rooms->get($data['room_name']);
+    /**
+     * @return iterable<array<string, string>>
+     */
+    private function readCsv(string $path): iterable
+    {
+        $file = new SplFileObject($path);
+        $file->setFlags(SplFileObject::READ_CSV | SplFileObject::DROP_NEW_LINE | SplFileObject::SKIP_EMPTY);
 
-            if (! $roomId) {
-                $this->command->warn("Skipping — room \"{$data['room_name']}\" not found.");
+        $headers = null;
+
+        foreach ($file as $lineNumber => $row) {
+            if ($row === [null] || $row === false) {
                 continue;
             }
 
-            Schedule::create([
-                'academic_term_id' => $term->id,
-                'room_id'          => $roomId,
-                'subject_code'     => $data['subject_code'],
-                'subject_title'    => $data['subject_title'],
-                'section'          => $data['section'],
-                'instructor_name'  => $data['instructor_name'],
-                'day_of_week'      => $data['day_of_week'],
-                'start_time'       => $data['start_time'],
-                'end_time'         => $data['end_time'],
-                'is_active'        => true,
-                'created_by'       => $adminId,
-                'updated_by'       => $adminId,
-            ]);
+            if ($headers === null) {
+                $headers = array_map(
+                    fn ($header) => strtolower(trim(preg_replace('/^\xEF\xBB\xBF/', '', (string) $header))),
+                    $row
+                );
+
+                continue;
+            }
+
+            if (count($row) !== count($headers)) {
+                throw new RuntimeException("Invalid CSV column count on line " . ($lineNumber + 1));
+            }
+
+            $record = array_combine(
+                $headers,
+                array_map(fn ($value) => trim((string) $value), $row)
+            );
+
+            if ($record === false || implode('', $record) === '') {
+                continue;
+            }
+
+            foreach (['day', 'room_code', 'start_time', 'end_time', 'subject_code', 'subject_title', 'section'] as $requiredColumn) {
+                if (($record[$requiredColumn] ?? '') === '') {
+                    throw new RuntimeException("Missing required CSV value '{$requiredColumn}' on line " . ($lineNumber + 1));
+                }
+            }
+
+            yield $record;
         }
+    }
+
+    private function dayOfWeek(string $day): DayOfWeek
+    {
+        return match (strtolower(trim($day))) {
+            'monday'    => DayOfWeek::Monday,
+            'tuesday'   => DayOfWeek::Tuesday,
+            'wednesday' => DayOfWeek::Wednesday,
+            'thursday'  => DayOfWeek::Thursday,
+            'friday'    => DayOfWeek::Friday,
+            'saturday'  => DayOfWeek::Saturday,
+            default     => throw new RuntimeException("Unsupported day value: {$day}"),
+        };
+    }
+
+    private function normalizeTime(string $time): string
+    {
+        $time = strtoupper(trim($time));
+
+        foreach (['H:i:s', 'H:i', 'g:i A', 'g:iA', 'h:i A', 'h:iA'] as $format) {
+            $parsed = DateTimeImmutable::createFromFormat('!' . $format, $time);
+
+            if ($parsed instanceof DateTimeImmutable) {
+                return $parsed->format('H:i:s');
+            }
+        }
+
+        throw new RuntimeException("Unsupported time value: {$time}");
+    }
+
+    private function roomFloor(string $roomCode): ?int
+    {
+        if (preg_match('/CEA(\d)/i', $roomCode, $matches) === 1) {
+            return (int) $matches[1];
+        }
+
+        return null;
+    }
+
+    private function roomDisplayOrder(string $roomCode): int
+    {
+        return match (strtoupper($roomCode)) {
+            'CEA302' => 1,
+            'CEA300' => 2,
+            'CEA316' => 3,
+            'CEA315' => 4,
+            'CEA314' => 5,
+            'CEA313' => 6,
+            'CEA312' => 7,
+            'CEA311' => 8,
+            'CEA310' => 9,
+            'CEA413' => 10,
+            'CEA207' => 11,
+            default  => 999,
+        };
     }
 }

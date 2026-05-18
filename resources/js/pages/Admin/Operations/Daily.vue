@@ -29,14 +29,15 @@ interface Room {
     type?: string;
 }
 
-type DailySlotSource = 'schedule' | 'exception';
-type DailySlotType = 'regular' | 'cancellation' | 'room_change' | 'special_class' | 'makeup_class';
-type DailySlotStatus = 'scheduled' | 'pending' | 'ongoing' | 'completed' | 'cancelled' | 'auto_cancelled';
+type DailySlotSource = 'schedule' | 'exception' | 'override';
+type DailySlotType = 'regular' | 'cancellation' | 'room_change' | 'special_class' | 'makeup_class' | 'maintenance' | 'unavailable' | 'reserved';
+type DailySlotStatus = 'scheduled' | 'pending' | 'ongoing' | 'completed' | 'cancelled' | 'auto_cancelled' | 'maintenance' | 'unavailable' | 'reserved';
 
 interface DailySlot {
     id: number | string;
     schedule_id?: number | null;
     exception_id?: number | null;
+    override_id?: number | null;
     room_id: number;
     original_room_id?: number | null;
     original_room_code?: string | null;
@@ -51,6 +52,8 @@ interface DailySlot {
     start_time: string;
     end_time: string;
     reason?: string | null;
+    starts_at?: string | null;
+    ends_at?: string | null;
 }
 
 
@@ -274,6 +277,9 @@ const EVENT_TYPE_LABEL: Record<DailySlotType, string> = {
     room_change: 'Room Change',
     special_class: 'Special Class',
     makeup_class: 'Makeup Class',
+    maintenance: 'Maintenance',
+    unavailable: 'Unavailable',
+    reserved: 'Reserved',
 };
 
 const STATUS_LABEL: Record<DailySlotStatus, string> = {
@@ -283,6 +289,9 @@ const STATUS_LABEL: Record<DailySlotStatus, string> = {
     completed: 'Completed',
     cancelled: 'Cancelled',
     auto_cancelled: 'Auto-cancelled',
+    maintenance: 'Maintenance',
+    unavailable: 'Unavailable',
+    reserved: 'Reserved',
 };
 
 const EVENT_CLASS: Record<DailySlotType, string> = {
@@ -291,14 +300,22 @@ const EVENT_CLASS: Record<DailySlotType, string> = {
     room_change: 'border-orange-300 bg-orange-50 text-orange-900',
     special_class: 'border-emerald-300 bg-emerald-50 text-emerald-900',
     makeup_class: 'border-violet-300 bg-violet-50 text-violet-900',
+    maintenance: 'border-status-maintenance bg-status-maintenance-bg text-pup-gray-800',
+    unavailable: 'border-pup-gray-600 bg-pup-gray-200 text-pup-gray-800',
+    reserved: 'border-status-reserved-border bg-status-reserved-bg text-status-reserved',
 };
+
+const EXCEPTION_BADGE_CLASS = 'border border-pup-gold/50 bg-pup-gold-pale text-pup-maroon';
 
 const EVENT_BADGE: Record<DailySlotType, string> = {
     regular: 'bg-sky-100 text-sky-700',
-    cancellation: 'bg-slate-200 text-slate-600',
-    room_change: 'bg-orange-100 text-orange-700',
-    special_class: 'bg-emerald-100 text-emerald-700',
-    makeup_class: 'bg-violet-100 text-violet-700',
+    cancellation: EXCEPTION_BADGE_CLASS,
+    room_change: EXCEPTION_BADGE_CLASS,
+    special_class: EXCEPTION_BADGE_CLASS,
+    makeup_class: EXCEPTION_BADGE_CLASS,
+    maintenance: 'bg-status-maintenance-bg text-status-maintenance',
+    unavailable: 'bg-pup-gray-200 text-pup-gray-800',
+    reserved: 'bg-status-reserved-bg text-status-reserved',
 };
 
 const STATUS_BADGE: Record<DailySlotStatus, string> = {
@@ -308,6 +325,9 @@ const STATUS_BADGE: Record<DailySlotStatus, string> = {
     completed: 'bg-gray-100 text-gray-600',
     cancelled: 'bg-slate-100 text-slate-600',
     auto_cancelled: 'bg-rose-50 text-rose-700',
+    maintenance: 'bg-status-maintenance-bg text-status-maintenance',
+    unavailable: 'bg-pup-gray-200 text-pup-gray-800',
+    reserved: 'bg-status-reserved-bg text-status-reserved',
 };
 
 type YearLevel = '1' | '2' | '3' | '4' | 'unknown';
@@ -320,14 +340,6 @@ const YEAR_LEVEL_CLASS: Record<YearLevel, string> = {
     unknown: 'border-gray-200 bg-gray-50 text-gray-800',
 };
 
-const YEAR_LEVEL_BADGE: Record<YearLevel, string> = {
-    '1': 'bg-sky-100 text-sky-700',
-    '2': 'bg-emerald-100 text-emerald-700',
-    '3': 'bg-amber-100 text-amber-700',
-    '4': 'bg-pup-maroon text-white',
-    unknown: 'bg-gray-200 text-gray-600',
-};
-
 function yearLevel(slot: DailySlot): YearLevel {
     const section = slot.section ?? '';
     const bscpeMatch = section.match(/BSCPE\s*([1-4])/i);
@@ -337,23 +349,120 @@ function yearLevel(slot: DailySlot): YearLevel {
     return ['1', '2', '3', '4'].includes(value ?? '') ? (value as YearLevel) : 'unknown';
 }
 
-function yearLevelLabel(slot: DailySlot): string {
-    const level = yearLevel(slot);
-    return level === 'unknown' ? 'YR ?' : `YR ${level}`;
+
+
+
+function isOverrideSlot(slot: DailySlot): boolean {
+    return slot.source === 'override';
+}
+
+function isClassSlot(slot: DailySlot): boolean {
+    return slot.source !== 'override';
+}
+
+function isExceptionSlot(slot: DailySlot): boolean {
+    return slot.source === 'exception'
+        || ['cancellation', 'room_change', 'special_class', 'makeup_class'].includes(slot.event_type);
+}
+
+function slotsOverlap(first: DailySlot, second: DailySlot): boolean {
+    return parseMinutes(first.start_time) < parseMinutes(second.end_time)
+        && parseMinutes(first.end_time) > parseMinutes(second.start_time);
+}
+
+function overlappingOverrides(slot: DailySlot): DailySlot[] {
+    if (isOverrideSlot(slot)) return [];
+
+    return filteredSlots.value.filter((candidate) => {
+        return isOverrideSlot(candidate)
+            && candidate.room_id === slot.room_id
+            && slotsOverlap(slot, candidate);
+    });
+}
+
+function blockingOverride(slot: DailySlot): DailySlot | null {
+    const overrides = overlappingOverrides(slot);
+
+    if (overrides.length === 0) return null;
+
+    // Layer 1 override priority is already above schedules. This order only controls the label
+    // if multiple room overrides accidentally overlap the same class in the same room.
+    const priority: Record<string, number> = {
+        maintenance: 1,
+        unavailable: 2,
+        reserved: 3,
+    };
+
+    return [...overrides].sort((a, b) => (priority[a.event_type] ?? 99) - (priority[b.event_type] ?? 99))[0];
+}
+
+function blockingOverrideLabel(slot: DailySlot): string {
+    const override = blockingOverride(slot);
+
+    return override ? `Blocked by ${EVENT_TYPE_LABEL[override.event_type]}` : '';
+}
+
+function blockingOverrideDetails(slot: DailySlot): string {
+    const override = blockingOverride(slot);
+
+    return override ? `${EVENT_TYPE_LABEL[override.event_type]} · ${formatTimeRange(override)}` : '';
+}
+
+function overrideHasAffectedClass(slot: DailySlot): boolean {
+    if (!isOverrideSlot(slot)) return false;
+
+    return filteredSlots.value.some((candidate) => {
+        return isClassSlot(candidate)
+            && candidate.room_id === slot.room_id
+            && !['cancelled', 'auto_cancelled'].includes(candidate.status)
+            && slotsOverlap(slot, candidate);
+    });
 }
 
 function slotBlockClass(slot: DailySlot): string {
+    if (isOverrideSlot(slot)) {
+        const overlapState = overrideHasAffectedClass(slot)
+            // Keep the old overlap behavior: the override stays as a diagonal room-state
+            // band behind the class. Hover still brings whichever block is focused to front.
+            ? 'z-20 border-dashed opacity-75 shadow-none'
+            : 'z-30';
+
+        return `${EVENT_CLASS[slot.event_type]} ${overlapState}`;
+    }
+
     const base = YEAR_LEVEL_CLASS[yearLevel(slot)];
+    const blocker = blockingOverride(slot);
+    const exceptionState = isExceptionSlot(slot)
+        // One unified exception design regardless of special/makeup/room-change/cancellation.
+        ? 'border-2 border-pup-maroon/70 border-l-4 bg-white text-pup-maroon-deep shadow-sm'
+        : '';
 
     if (['cancelled', 'auto_cancelled'].includes(slot.status)) {
-        return `${base} opacity-60 grayscale`;
+        return `${isExceptionSlot(slot) ? exceptionState : base} z-30 opacity-60 grayscale`;
+    }
+
+    if (blocker) {
+        // Do not add a heavy warning border. The class remains readable while the
+        // diagonal override band communicates that the room status wins.
+        return `${isExceptionSlot(slot) ? exceptionState : base} z-40 shadow-sm`;
     }
 
     if (slot.status === 'ongoing') {
-        return `${base} ring-2 ring-green-400/60`;
+        return `${isExceptionSlot(slot) ? exceptionState : base} z-30 ring-2 ring-green-400/60`;
     }
 
-    return base;
+    return `${isExceptionSlot(slot) ? exceptionState : base} z-30`;
+}
+
+function slotBlockStyle(slot: DailySlot): Record<string, string> {
+    if (isOverrideSlot(slot) && overrideHasAffectedClass(slot)) {
+        return {
+            backgroundImage:
+                'repeating-linear-gradient(135deg, rgba(74, 11, 24, 0.14) 0px, rgba(74, 11, 24, 0.14) 3px, transparent 3px, transparent 9px)',
+        };
+    }
+
+    return {};
 }
 
 const parseMinutes = (time: string) => {
@@ -361,8 +470,18 @@ const parseMinutes = (time: string) => {
     return hour * 60 + minute;
 };
 
-const slotTop = (time: string) => ((parseMinutes(time) - START_HOUR * 60) / 60) * HOUR_HEIGHT;
-const slotHeight = (start: string, end: string) => Math.max(((parseMinutes(end) - parseMinutes(start)) / 60) * HOUR_HEIGHT, 34);
+const visibleStartMinutes = START_HOUR * 60;
+const visibleEndMinutes = END_HOUR * 60;
+
+const clampMinutes = (minutes: number) => Math.min(Math.max(minutes, visibleStartMinutes), visibleEndMinutes);
+
+const slotTop = (time: string) => ((clampMinutes(parseMinutes(time)) - visibleStartMinutes) / 60) * HOUR_HEIGHT;
+const slotHeight = (start: string, end: string) => {
+    const startMinutes = clampMinutes(parseMinutes(start));
+    const endMinutes = clampMinutes(parseMinutes(end));
+
+    return Math.max(((endMinutes - startMinutes) / 60) * HOUR_HEIGHT, 34);
+};
 
 const formatHour = (hour: number) => `${hour % 12 || 12}${hour < 12 ? 'AM' : 'PM'}`;
 const formatTime = (time: string) => {
@@ -679,6 +798,9 @@ onUnmounted(() => {
                                 <option value="room_change">Room Change</option>
                                 <option value="special_class">Special Class</option>
                                 <option value="makeup_class">Makeup Class</option>
+                                <option value="maintenance">Maintenance</option>
+                                <option value="unavailable">Unavailable</option>
+                                <option value="reserved">Reserved</option>
                             </select>
                         </label>
                     </div>
@@ -757,42 +879,58 @@ onUnmounted(() => {
                                 v-for="slot in room.slots"
                                 :key="slot.id"
                                 type="button"
-                                class="group absolute inset-x-1 overflow-hidden rounded-md border px-1.5 py-1 text-left shadow-sm transition hover:z-20 hover:brightness-95 hover:shadow-md"
+                                class="group absolute inset-x-1 overflow-hidden rounded-md border px-1.5 py-1 text-left shadow-sm transition hover:z-50 hover:brightness-95 hover:shadow-md"
                                 :class="slotBlockClass(slot)"
                                 :style="{
                                     top: slotTop(slot.start_time) + 3 + 'px',
                                     height: slotHeight(slot.start_time, slot.end_time) - 6 + 'px',
+                                    ...slotBlockStyle(slot),
                                 }"
                                 @click="openSlot(slot)"
                             >
                                 <div class="flex items-start justify-between gap-1">
                                     <p class="line-clamp-2 text-[11px] font-bold leading-snug">
-                                        {{ slot.subject_code }}
+                                        {{ slot.source === 'override' ? EVENT_TYPE_LABEL[slot.event_type] : slot.subject_code }}
                                     </p>
                                     <div class="flex shrink-0 flex-col items-end gap-1">
                                         <span
-                                            class="rounded px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide"
-                                            :class="YEAR_LEVEL_BADGE[yearLevel(slot)]"
+                                            v-if="blockingOverrideLabel(slot)"
+                                            class="rounded bg-pup-maroon/90 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white"
                                         >
-                                            {{ yearLevelLabel(slot) }}
+                                            Blocked
                                         </span>
                                         <span
-                                            v-if="slot.event_type !== 'regular'"
-                                            class="rounded px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide"
-                                            :class="EVENT_BADGE[slot.event_type]"
+                                            v-if="isExceptionSlot(slot)"
+                                            class="rounded border border-pup-maroon/25 bg-pup-maroon-pale px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-pup-maroon"
                                         >
-                                            {{ EVENT_TYPE_LABEL[slot.event_type].split(' ')[0] }}
+                                            Exception
                                         </span>
                                     </div>
                                 </div>
-                                <p class="line-clamp-2 text-[10px] font-semibold leading-snug opacity-80">
-                                    {{ slot.subject_title }}
-                                </p>
-                                <p class="mt-0.5 text-[10px] opacity-65">{{ formatTimeRange(slot) }}</p>
-                                <p class="truncate text-[10px] opacity-55">{{ slot.section }}</p>
-                                <p v-if="slot.event_type === 'room_change'" class="mt-0.5 truncate text-[9px] font-semibold opacity-70">
-                                    From {{ slot.original_room_code }}
-                                </p>
+
+                                <template v-if="slot.source === 'override'">
+                                    <p class="line-clamp-2 text-[10px] font-semibold leading-snug opacity-80">
+                                        Room status override
+                                    </p>
+                                    <p class="mt-0.5 text-[10px] opacity-65">{{ formatTimeRange(slot) }}</p>
+                                </template>
+
+                                <template v-else>
+                                    <p class="line-clamp-2 text-[10px] font-semibold leading-snug opacity-80">
+                                        {{ slot.subject_title }}
+                                    </p>
+                                    <p class="mt-0.5 text-[10px] opacity-65">{{ formatTimeRange(slot) }}</p>
+                                    <p class="truncate text-[10px] opacity-55">{{ slot.section }}</p>
+                                    <p
+                                        v-if="blockingOverrideLabel(slot)"
+                                        class="mt-0.5 truncate text-[9px] font-semibold text-pup-maroon"
+                                    >
+                                        {{ blockingOverrideLabel(slot) }}
+                                    </p>
+                                    <p v-if="slot.event_type === 'room_change'" class="mt-0.5 truncate text-[9px] font-semibold opacity-70">
+                                        From {{ slot.original_room_code }}
+                                    </p>
+                                </template>
                             </button>
                         </div>
                     </div>
@@ -841,6 +979,9 @@ onUnmounted(() => {
                                     <td class="px-4 py-3">
                                         <div class="font-semibold text-gray-900">{{ slot.subject_code }} · {{ slot.subject_title }}</div>
                                         <div class="text-xs text-gray-500">{{ slot.section }}</div>
+                                        <div v-if="blockingOverrideDetails(slot)" class="mt-1 inline-flex rounded-full bg-pup-maroon-pale px-2 py-0.5 text-[11px] font-bold text-pup-maroon">
+                                            Room status: {{ blockingOverrideDetails(slot) }}
+                                        </div>
                                     </td>
                                     <td class="px-4 py-3 text-gray-600">{{ slot.instructor_name || '—' }}</td>
                                     <td class="px-4 py-3">
@@ -921,9 +1062,19 @@ onUnmounted(() => {
                     <span class="font-semibold">Reason:</span> {{ selectedSlot.reason }}
                 </div>
 
+                <div v-if="blockingOverrideLabel(selectedSlot)" class="rounded-xl border border-pup-maroon/20 bg-pup-maroon-pale px-4 py-3 text-sm text-pup-maroon">
+                    <span class="font-semibold">Room override priority:</span>
+                    {{ blockingOverrideDetails(selectedSlot) }}. The override is the active room status and wins over this class for the overlapping time.
+                </div>
+
+                <div v-if="selectedSlot.source === 'override' && overrideHasAffectedClass(selectedSlot)" class="rounded-xl border border-pup-maroon/20 bg-pup-maroon-pale px-4 py-3 text-sm text-pup-maroon">
+                    <span class="font-semibold">Override priority:</span>
+                    This room override overlaps at least one class. The room status control wins over schedule items during the overlap.
+                </div>
+
                 <div v-if="!activeAction" class="flex flex-wrap justify-end gap-2 border-t border-gray-100 pt-4">
                     <button
-                        v-if="selectedSlot.status !== 'cancelled'"
+                        v-if="selectedSlot.source !== 'override' && selectedSlot.status !== 'cancelled'"
                         @click="openAction('cancel')"
                         class="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                     >
@@ -931,7 +1082,7 @@ onUnmounted(() => {
                         Cancel
                     </button>
                     <button
-                        v-if="selectedSlot.status !== 'cancelled'"
+                        v-if="selectedSlot.source !== 'override' && selectedSlot.status !== 'cancelled'"
                         @click="openAction('change-room')"
                         class="inline-flex items-center gap-2 rounded-lg border border-orange-200 px-3 py-2 text-sm font-semibold text-orange-700 transition hover:bg-orange-50"
                     >
@@ -939,7 +1090,7 @@ onUnmounted(() => {
                         Change Room
                     </button>
                     <button
-                        v-if="['scheduled', 'pending'].includes(selectedSlot.status)"
+                        v-if="selectedSlot.source !== 'override' && ['scheduled', 'pending'].includes(selectedSlot.status)"
                         @click="openAction('start')"
                         class="inline-flex items-center gap-2 rounded-lg border border-green-200 px-3 py-2 text-sm font-semibold text-green-700 transition hover:bg-green-50"
                     >
@@ -947,7 +1098,7 @@ onUnmounted(() => {
                         Mark Started
                     </button>
                     <button
-                        v-if="selectedSlot.status === 'ongoing'"
+                        v-if="selectedSlot.source !== 'override' && selectedSlot.status === 'ongoing'"
                         @click="openAction('complete')"
                         class="inline-flex items-center gap-2 rounded-lg bg-pup-maroon px-3 py-2 text-sm font-semibold text-white transition hover:bg-pup-maroon-deep"
                     >

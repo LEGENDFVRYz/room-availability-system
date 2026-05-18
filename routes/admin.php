@@ -41,10 +41,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified'])->group(
     Route::delete('/schedules/{schedule}',        [ScheduleController::class, 'destroy'])->name('schedules.destroy');
 
     # Operations 
-    Route::redirect('/operations', '/admin/operations/daily')->name('manage');
+    Route::redirect('/operations', '/admin/operations/daily')->name('operations');
 
     # Operations - Daily Schedule
-    Route::get('/operations/daily',         [OperationController::class, 'daily'])->name('manage.configs');
+    Route::get('/operations/daily',         [OperationController::class, 'daily'])->name('operations.daily');
 
     # Operations - Room Status
     Route::get('/operations/room-status',                        [OperationController::class, 'rooms'])->name('operations.room-status');

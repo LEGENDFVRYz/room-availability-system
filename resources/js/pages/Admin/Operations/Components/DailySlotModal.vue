@@ -378,7 +378,7 @@ function applyAction() {
 
                 <div v-if="!activeAction" class="flex flex-wrap justify-end gap-2 border-t border-gray-100 pt-4">
                     <button
-                        v-if="slot.source !== 'override' && slot.status !== 'cancelled'"
+                        v-if="slot.source !== 'override' && !['cancelled', 'auto_cancelled', 'completed'].includes(slot.status)"
                         type="button"
                         @click="openAction('cancel')"
                         class="inline-flex items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
@@ -387,7 +387,7 @@ function applyAction() {
                         Cancel
                     </button>
                     <button
-                        v-if="slot.source !== 'override' && slot.status !== 'cancelled'"
+                        v-if="slot.source !== 'override' && !['cancelled', 'auto_cancelled', 'completed'].includes(slot.status)"
                         type="button"
                         @click="openAction('change-room')"
                         class="inline-flex items-center gap-2 rounded-lg border border-amber-200 px-3 py-2 text-sm font-semibold text-amber-700 transition hover:bg-amber-50"
@@ -423,7 +423,7 @@ function applyAction() {
                         <template v-if="activeAction === 'complete'">Mark this class as completed?</template>
                     </h4>
                     <p class="mt-1 text-sm text-gray-500">
-                        This is preview behavior for the frontend. Backend wiring will later create or update schedule exceptions.
+                        This action will update the Daily Operations records and refresh the board.
                     </p>
 
                     <label v-if="activeAction === 'change-room'" class="mt-4 flex flex-col gap-1 text-sm font-medium text-gray-600">
@@ -450,7 +450,7 @@ function applyAction() {
                             Back
                         </button>
                         <button type="button" @click="applyAction" class="rounded-lg bg-pup-maroon px-3 py-2 text-sm font-semibold text-white hover:bg-pup-maroon-deep">
-                            Apply Preview
+                            Apply
                         </button>
                     </div>
                 </div>

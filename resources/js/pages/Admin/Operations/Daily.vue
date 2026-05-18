@@ -417,18 +417,23 @@ function isSlotHappeningNow(slot: DailySlot): boolean {
     return parseMinutes(slot.start_time) <= nowMinutes.value && nowMinutes.value < parseMinutes(slot.end_time);
 }
 
-const occupiedNowCount = computed(() => filteredSlots.value.filter(isSlotHappeningNow).length);
+function isClassSlotAwaitingClaim(slot: DailySlot): boolean {
+    return isClassSlot(slot) && ['scheduled', 'pending'].includes(slot.status);
+}
+
+const reservedNowCount = computed(() => filteredSlots.value.filter((slot) => isSlotHappeningNow(slot) && isClassSlotAwaitingClaim(slot)).length);
+const occupiedNowCount = computed(() => filteredSlots.value.filter((slot) => isSlotHappeningNow(slot) && isClassSlot(slot) && slot.status === 'ongoing').length);
 const freeRoomsNowCount = computed(() => {
     const visibleRooms = roomsForGrid.value;
-    const occupiedRoomIds = new Set(filteredSlots.value.filter(isSlotHappeningNow).map((slot) => slot.room_id));
+    const busyRoomIds = new Set(filteredSlots.value.filter(isSlotHappeningNow).map((slot) => slot.room_id));
 
-    return visibleRooms.filter((room) => !occupiedRoomIds.has(room.id)).length;
+    return visibleRooms.filter((room) => !busyRoomIds.has(room.id)).length;
 });
 const upcomingSoonCount = computed(() => {
     if (nowMinutes.value === null) return 0;
 
     return filteredSlots.value.filter((slot) => {
-        if (['cancelled', 'auto_cancelled', 'completed', 'ongoing'].includes(slot.status)) return false;
+        if (!isClassSlot(slot) || ['cancelled', 'auto_cancelled', 'completed', 'ongoing'].includes(slot.status)) return false;
 
         const start = parseMinutes(slot.start_time);
         return start >= nowMinutes.value && start <= nowMinutes.value + 30;
@@ -437,6 +442,7 @@ const upcomingSoonCount = computed(() => {
 
 const summaryStats = computed(() => ({
     freeRoomsNowCount: freeRoomsNowCount.value,
+    reservedNowCount: reservedNowCount.value,
     occupiedNowCount: occupiedNowCount.value,
     upcomingSoonCount: upcomingSoonCount.value,
     exceptionCount: exceptionCount.value,
@@ -469,28 +475,23 @@ function closeClassModal() {
     showClassModal.value = false;
 }
 
-function saveClassPreview(payload: ClassRequestPayload) {
+function saveClassRequest(payload: ClassRequestPayload) {
     if (!payload.room_id || !payload.subject_code || !payload.subject_title || !payload.section) return;
 
-    localSlots.value.push({
-        id: Date.now(),
-        schedule_id: null,
-        exception_id: Date.now(),
-        room_id: payload.room_id,
-        event_date: selectedDate.value,
-        source: 'exception',
-        event_type: payload.event_type,
-        status: 'pending',
-        subject_code: payload.subject_code,
-        subject_title: payload.subject_title,
-        section: payload.section,
-        instructor_name: payload.instructor_name || null,
-        start_time: payload.start_time,
-        end_time: payload.end_time,
-        reason: payload.reason || null,
-    });
-
-    closeClassModal();
+    router.post(
+        '/admin/operations/daily/request-class',
+        {
+            ...payload,
+            event_date: selectedDate.value,
+        },
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                closeClassModal();
+                lastUpdatedAt.value = new Date();
+            },
+        },
+    );
 }
 
 function openSlot(slot: DailySlot) {
@@ -501,39 +502,46 @@ function closeSlot() {
     selectedSlot.value = null;
 }
 
-function applyActionPreview(payload: SlotActionPayload) {
-    const index = localSlots.value.findIndex((slot) => slot.id === payload.slot.id);
-    if (index === -1) return;
+function applySlotAction(payload: SlotActionPayload) {
+    const basePayload = {
+        event_date: selectedDate.value,
+        schedule_id: payload.slot.schedule_id ?? null,
+        exception_id: payload.slot.exception_id ?? null,
+    };
 
-    const current = { ...localSlots.value[index] };
+    const options = {
+        preserveScroll: true,
+        onSuccess: () => {
+            closeSlot();
+            lastUpdatedAt.value = new Date();
+        },
+    };
 
     if (payload.action === 'cancel') {
-        current.source = 'exception';
-        current.event_type = 'cancellation';
-        current.status = 'cancelled';
-        current.reason = payload.reason || current.reason || 'Cancelled by admin.';
+        router.post('/admin/operations/daily/cancel', {
+            ...basePayload,
+            reason: payload.reason,
+        }, options);
+        return;
     }
 
-    if (payload.action === 'change-room' && payload.room_id && payload.room_id !== current.room_id) {
-        current.source = 'exception';
-        current.event_type = 'room_change';
-        current.status = 'pending';
-        current.original_room_id = current.original_room_id ?? current.room_id;
-        current.original_room_code = current.original_room_code ?? roomCode(current.room_id);
-        current.room_id = payload.room_id;
-        current.reason = payload.reason || current.reason || 'Room changed by admin.';
+    if (payload.action === 'change-room') {
+        router.post('/admin/operations/daily/change-room', {
+            ...basePayload,
+            room_id: payload.room_id,
+            reason: payload.reason,
+        }, options);
+        return;
     }
 
     if (payload.action === 'start') {
-        current.status = 'ongoing';
+        router.patch('/admin/operations/daily/mark-started', basePayload, options);
+        return;
     }
 
     if (payload.action === 'complete') {
-        current.status = 'completed';
+        router.patch('/admin/operations/daily/mark-completed', basePayload, options);
     }
-
-    localSlots.value.splice(index, 1, current);
-    selectedSlot.value = { ...current };
 }
 
 onMounted(() => {
@@ -631,20 +639,20 @@ onUnmounted(() => {
                     <p class="mt-2 text-2xl font-bold text-green-800">{{ summaryStats.freeRoomsNowCount }}</p>
                     <p class="text-xs text-green-600">selected rooms without active class</p>
                 </div>
+                <div class="rounded-xl border border-pup-gold/30 bg-pup-gold-pale/50 p-4 shadow-sm">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-pup-maroon">Reserved Now</p>
+                    <p class="mt-2 text-2xl font-bold text-pup-maroon-deep">{{ summaryStats.reservedNowCount }}</p>
+                    <p class="text-xs text-pup-maroon/70">classes awaiting claim</p>
+                </div>
                 <div class="rounded-xl border border-red-100 bg-red-50/70 p-4 shadow-sm">
                     <p class="text-xs font-semibold uppercase tracking-wide text-red-500">Occupied Now</p>
                     <p class="mt-2 text-2xl font-bold text-red-800">{{ summaryStats.occupiedNowCount }}</p>
-                    <p class="text-xs text-red-600">classes currently using rooms</p>
-                </div>
-                <div class="rounded-xl border border-amber-100 bg-amber-50/70 p-4 shadow-sm">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-amber-600">Upcoming</p>
-                    <p class="mt-2 text-2xl font-bold text-amber-800">{{ summaryStats.upcomingSoonCount }}</p>
-                    <p class="text-xs text-amber-600">classes within the next 30 minutes</p>
+                    <p class="text-xs text-red-600">marked as started</p>
                 </div>
                 <div class="rounded-xl border border-orange-100 bg-orange-50/70 p-4 shadow-sm">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-orange-600">Exceptions / Cancelled</p>
-                    <p class="mt-2 text-2xl font-bold text-orange-800">{{ summaryStats.exceptionCount }} / {{ summaryStats.cancelledCount }}</p>
-                    <p class="text-xs text-orange-600">changes from baseline / freed slots</p>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-orange-600">Risk / Exceptions</p>
+                    <p class="mt-2 text-2xl font-bold text-orange-800">{{ summaryStats.upcomingSoonCount }} / {{ summaryStats.exceptionCount }}</p>
+                    <p class="text-xs text-orange-600">starting soon / daily changes</p>
                 </div>
             </div>
 
@@ -679,7 +687,7 @@ onUnmounted(() => {
         :rooms="rooms"
         :all-slots="filteredSlots"
         @close="closeSlot"
-        @apply-action="applyActionPreview"
+        @apply-action="applySlotAction"
     />
 
     <DailyRequestClassModal
@@ -687,6 +695,6 @@ onUnmounted(() => {
         :rooms="rooms"
         :selected-date-label="selectedDateLabel"
         @close="closeClassModal"
-        @save="saveClassPreview"
+        @save="saveClassRequest"
     />
 </template>

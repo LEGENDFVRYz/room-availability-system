@@ -43,6 +43,7 @@ export interface DailySlot {
     id: number | string;
     schedule_id?: number | null;
     exception_id?: number | null;
+    usage_log_id?: number | null;
     override_id?: number | null;
     room_id: number;
     original_room_id?: number | null;
@@ -68,6 +69,7 @@ export interface RoomWithSlots extends Room {
 
 export interface SummaryStats {
     freeRoomsNowCount: number;
+    reservedNowCount: number;
     occupiedNowCount: number;
     upcomingSoonCount: number;
     exceptionCount: number;

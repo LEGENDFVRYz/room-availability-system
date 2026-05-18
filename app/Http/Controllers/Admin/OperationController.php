@@ -5,16 +5,20 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreRoomOverrideRequest;
 use App\Http\Requests\Admin\UpdateRoomOverrideRequest;
-use App\Services\RoomOverrideService;
 use App\Models\AcademicTerm;
 use App\Models\Room;
 use App\Models\RoomOverride;
+use App\Models\RoomUsageLog;
 use App\Models\Schedule;
 use App\Models\ScheduleException;
+use App\Services\DailyOperationService;
+use App\Services\RoomOverrideService;
 use BackedEnum;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -22,6 +26,7 @@ class OperationController extends Controller
 {
     public function __construct(
         private readonly RoomOverrideService $roomOverrideService,
+        private readonly DailyOperationService $dailyOperationService,
     ) {}
 
     # -------------------------------------------------------------------
@@ -45,7 +50,7 @@ class OperationController extends Controller
         $dayEnd = $date->copy()->endOfDay();
 
         // Prefer the term that actually contains the selected date.
-        // This fixes cases where the global current term and the selected date's term are out of sync.
+        // This keeps Daily Operations correct even when global currentTerm is out of sync.
         $operationTerm = $this->resolveOperationTerm($date);
 
         $roomsBaseQuery = Room::query()
@@ -53,7 +58,7 @@ class OperationController extends Controller
             ->orderBy('display_order')
             ->orderBy('code');
 
-        // Layer 1: room overrides are not term-based.
+        // Layer 1: room overrides are physical/admin room states and are not term-based.
         $roomOverrides = RoomOverride::query()
             ->enabled()
             ->with('room:id,code,name,room_type')
@@ -102,7 +107,7 @@ class OperationController extends Controller
                 ->get();
 
             // Defensive fallback for imported/seeded one-off exceptions whose term flag is out of sync.
-            // This is intentionally limited to selected-date records with schedule_id NULL or linked to today's baseline schedules.
+            // Limited to selected-date records with schedule_id NULL or linked to today's baseline schedules.
             if ($exceptions->isEmpty()) {
                 $baselineScheduleIds = $regularSchedules->pluck('id')->filter()->values();
 
@@ -124,6 +129,8 @@ class OperationController extends Controller
                     ->get();
             }
         }
+
+        $usageLogsBySlot = $this->usageLogsBySlot($selectedDate);
 
         $usedRoomIds = $regularSchedules
             ->pluck('room_id')
@@ -150,41 +157,48 @@ class OperationController extends Controller
             ])
             ->values();
 
-        $regularItems = $regularSchedules->map(fn (Schedule $schedule) => [
-            'id'                 => "schedule-{$schedule->id}",
-            'schedule_id'        => $schedule->id,
-            'exception_id'       => null,
-            'override_id'        => null,
-            'room_id'            => $schedule->room_id,
-            'original_room_id'   => null,
-            'original_room_code' => null,
-            'event_date'         => $selectedDate,
-            'source'             => 'schedule',
-            'event_type'         => 'regular',
-            'status'             => 'scheduled',
-            'subject_code'       => $schedule->subject_code ?? '',
-            'subject_title'      => $schedule->subject_title ?? '',
-            'section'            => $schedule->section ?? '',
-            'instructor_name'    => $schedule->instructor_name,
-            'start_time'         => $this->timeValue($schedule->start_time),
-            'end_time'           => $this->timeValue($schedule->end_time),
-            'reason'             => null,
-        ]);
+        $regularItems = $regularSchedules->map(function (Schedule $schedule) use ($selectedDate, $usageLogsBySlot) {
+            $usageLog = $usageLogsBySlot->get("schedule-{$schedule->id}");
 
-        $exceptionItems = $exceptions->map(function (ScheduleException $exception) use ($selectedDate) {
+            return $this->applyUsageLogStatus([
+                'id'                 => "schedule-{$schedule->id}",
+                'schedule_id'        => $schedule->id,
+                'exception_id'       => null,
+                'usage_log_id'       => $usageLog?->id,
+                'override_id'        => null,
+                'room_id'            => $schedule->room_id,
+                'original_room_id'   => null,
+                'original_room_code' => null,
+                'event_date'         => $selectedDate,
+                'source'             => 'schedule',
+                'event_type'         => 'regular',
+                'status'             => 'scheduled',
+                'subject_code'       => $schedule->subject_code ?? '',
+                'subject_title'      => $schedule->subject_title ?? '',
+                'section'            => $schedule->section ?? '',
+                'instructor_name'    => $schedule->instructor_name,
+                'start_time'         => $this->timeValue($schedule->start_time),
+                'end_time'           => $this->timeValue($schedule->end_time),
+                'reason'             => null,
+            ], $usageLog);
+        });
+
+        $exceptionItems = $exceptions->map(function (ScheduleException $exception) use ($selectedDate, $usageLogsBySlot) {
             $schedule = $exception->schedule;
             $eventType = $this->enumValue($exception->event_type);
             $status = $this->enumValue($exception->status);
             $originalRoom = $schedule?->room;
+            $usageLog = $usageLogsBySlot->get("exception-{$exception->id}");
 
             if ($eventType === 'cancellation') {
                 $status = 'cancelled';
             }
 
-            return [
+            return $this->applyUsageLogStatus([
                 'id'                 => "exception-{$exception->id}",
                 'schedule_id'        => $exception->schedule_id,
                 'exception_id'       => $exception->id,
+                'usage_log_id'       => $usageLog?->id,
                 'override_id'        => null,
                 'room_id'            => $exception->room_id,
                 'original_room_id'   => $eventType === 'room_change' ? $schedule?->room_id : null,
@@ -200,7 +214,9 @@ class OperationController extends Controller
                 'start_time'         => $this->timeValue($exception->start_time ?: $schedule?->start_time),
                 'end_time'           => $this->timeValue($exception->end_time ?: $schedule?->end_time),
                 'reason'             => $exception->reason,
-            ];
+                'claimed_at'         => $exception->claimed_at?->toIso8601String(),
+                'auto_cancel_at'     => $exception->auto_cancel_at?->toIso8601String(),
+            ], $usageLog);
         });
 
         $overrideItems = $roomOverrides->map(function (RoomOverride $override) use ($dayStart, $dayEnd, $selectedDate) {
@@ -225,6 +241,7 @@ class OperationController extends Controller
                 'id'                 => "override-{$override->id}",
                 'schedule_id'        => null,
                 'exception_id'       => null,
+                'usage_log_id'       => null,
                 'override_id'        => $override->id,
                 'room_id'            => $override->room_id,
                 'original_room_id'   => null,
@@ -255,8 +272,6 @@ class OperationController extends Controller
             ])
             ->values();
 
-        // dd($exceptionItems);
-
         return Inertia::render('Admin/Operations/Daily', [
             'rooms'             => $rooms,
             'daily_schedules'   => $dailySchedules,
@@ -265,7 +280,87 @@ class OperationController extends Controller
         ]);
     }
 
+    public function requestClass(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'event_date'      => ['required', 'date'],
+            'event_type'      => ['required', Rule::in(['special_class', 'makeup_class'])],
+            'room_id'         => ['required', 'integer', 'exists:tbl_rooms,id'],
+            'subject_code'    => ['required', 'string', 'max:20'],
+            'subject_title'   => ['required', 'string', 'max:150'],
+            'section'         => ['required', 'string', 'max:30'],
+            'instructor_name' => ['nullable', 'string', 'max:100'],
+            'start_time'      => ['required', 'date_format:H:i'],
+            'end_time'        => ['required', 'date_format:H:i', 'after:start_time'],
+            'reason'          => ['nullable', 'string'],
+        ]);
 
+        $this->dailyOperationService->requestClass($validated, $request->user()->id);
+
+        return back()->with('success', 'Class request created successfully.');
+    }
+
+    public function cancelClass(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'event_date'   => ['required', 'date'],
+            'schedule_id'  => ['nullable', 'integer', 'exists:tbl_schedules,id'],
+            'exception_id' => ['nullable', 'integer', 'exists:tbl_schedule_exceptions,id'],
+            'reason'       => ['nullable', 'string'],
+        ]);
+
+        $this->dailyOperationService->cancelClass($validated, $request->user()->id);
+
+        return back()->with('success', 'Class cancelled for the selected date.');
+    }
+
+    public function changeRoom(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'event_date'   => ['required', 'date'],
+            'schedule_id'  => ['nullable', 'integer', 'exists:tbl_schedules,id'],
+            'exception_id' => ['nullable', 'integer', 'exists:tbl_schedule_exceptions,id'],
+            'room_id'      => ['required', 'integer', 'exists:tbl_rooms,id'],
+            'reason'       => ['nullable', 'string'],
+        ]);
+
+        $this->dailyOperationService->changeRoom($validated, $request->user()->id);
+
+        return back()->with('success', 'Room changed for the selected date.');
+    }
+
+    public function markStarted(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'event_date'   => ['required', 'date'],
+            'schedule_id'  => ['nullable', 'integer', 'exists:tbl_schedules,id'],
+            'exception_id' => ['nullable', 'integer', 'exists:tbl_schedule_exceptions,id'],
+        ]);
+
+        $this->dailyOperationService->markStarted($validated, $request->user()->id);
+
+        return back()->with('success', 'Class marked as started.');
+    }
+
+    public function markCompleted(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'event_date'   => ['required', 'date'],
+            'schedule_id'  => ['nullable', 'integer', 'exists:tbl_schedules,id'],
+            'exception_id' => ['nullable', 'integer', 'exists:tbl_schedule_exceptions,id'],
+        ]);
+
+        $this->dailyOperationService->markCompleted($validated, $request->user()->id);
+
+        return back()->with('success', 'Class marked as completed.');
+    }
+
+    public function destroyException(ScheduleException $scheduleException): RedirectResponse
+    {
+        $scheduleException->delete();
+
+        return back()->with('success', 'Daily exception removed.');
+    }
 
     # -------------------------------------------------------------------
     # "Room Status" Controls
@@ -294,8 +389,8 @@ class OperationController extends Controller
             });
 
         return Inertia::render('Admin/Operations/RoomStatus', [
-            'rooms'       => $rooms,
-            'overrides'   => $overrides,
+            'rooms'     => $rooms,
+            'overrides' => $overrides,
         ]);
     }
 
@@ -381,7 +476,7 @@ class OperationController extends Controller
             ?? AcademicTerm::current()->first();
     }
 
-    private function scheduleExceptionsForDate(string $selectedDate, int $academicTermId)
+    private function scheduleExceptionsForDate(string $selectedDate, int $academicTermId): Collection
     {
         return ScheduleException::query()
             ->with([
@@ -393,5 +488,42 @@ class OperationController extends Controller
             ->whereDate('event_date', $selectedDate)
             ->orderBy('start_time')
             ->get();
+    }
+
+    private function usageLogsBySlot(string $selectedDate): Collection
+    {
+        return RoomUsageLog::query()
+            ->whereDate('usage_date', $selectedDate)
+            ->get()
+            ->keyBy(function (RoomUsageLog $log) {
+                return match ($log->source) {
+                    'schedule'           => "schedule-{$log->schedule_id}",
+                    'schedule_exception' => "exception-{$log->schedule_exception_id}",
+                    default              => "usage-{$log->id}",
+                };
+            });
+    }
+
+    private function applyUsageLogStatus(array $item, ?RoomUsageLog $usageLog): array
+    {
+        if (! $usageLog) {
+            return $item;
+        }
+
+        $item['usage_log_id'] = $usageLog->id;
+
+        $item['status'] = match ($usageLog->status) {
+            'reserved'       => $item['status'],
+            'occupied'       => 'ongoing',
+            'completed'      => 'completed',
+            'cancelled'      => 'cancelled',
+            'auto_cancelled' => 'auto_cancelled',
+            default          => $item['status'],
+        };
+
+        $item['actual_start'] = $usageLog->actual_start?->toIso8601String();
+        $item['actual_end'] = $usageLog->actual_end?->toIso8601String();
+
+        return $item;
     }
 }

@@ -44,10 +44,10 @@ const EVENT_TYPE_LABEL: Record<DailySlotType, string> = {
 };
 
 const STATUS_LABEL: Record<DailySlotStatus, string> = {
-    scheduled: 'Scheduled',
-    pending: 'Pending',
-    ongoing: 'Ongoing',
-    completed: 'Completed',
+    scheduled: 'Awaiting claim',
+    pending: 'Awaiting claim',
+    ongoing: 'Occupied',
+    completed: 'Finished',
     cancelled: 'Cancelled',
     auto_cancelled: 'Auto-cancelled',
     maintenance: 'Maintenance',
@@ -55,11 +55,11 @@ const STATUS_LABEL: Record<DailySlotStatus, string> = {
     reserved: 'Reserved',
 };
 
-const EXCEPTION_BADGE_CLASS = 'border border-pup-gold/50 bg-pup-gold-pale text-pup-maroon';
+const EXCEPTION_BADGE_CLASS = 'border border-pup-maroon/30 bg-white text-pup-maroon';
 
 const EVENT_BADGE: Record<DailySlotType, string> = {
     regular: 'bg-sky-100 text-sky-700',
-    cancellation: EXCEPTION_BADGE_CLASS,
+    cancellation: 'border border-gray-300 bg-gray-50 text-gray-500',
     room_change: EXCEPTION_BADGE_CLASS,
     special_class: EXCEPTION_BADGE_CLASS,
     makeup_class: EXCEPTION_BADGE_CLASS,
@@ -69,9 +69,9 @@ const EVENT_BADGE: Record<DailySlotType, string> = {
 };
 
 const STATUS_BADGE: Record<DailySlotStatus, string> = {
-    scheduled: 'bg-blue-50 text-blue-700',
-    pending: 'bg-amber-50 text-amber-700',
-    ongoing: 'bg-green-50 text-green-700',
+    scheduled: 'bg-gray-50 text-gray-600',
+    pending: 'bg-gray-50 text-gray-600',
+    ongoing: 'bg-status-occupied-bg text-status-occupied',
     completed: 'bg-gray-100 text-gray-600',
     cancelled: 'bg-slate-100 text-slate-600',
     auto_cancelled: 'bg-rose-50 text-rose-700',
@@ -84,7 +84,7 @@ const STATUS_BADGE: Record<DailySlotStatus, string> = {
 const YEAR_LEVEL_CLASS: Record<YearLevel, string> = {
     '1': 'border-sky-300 bg-sky-50 text-sky-950',
     '2': 'border-emerald-300 bg-emerald-50 text-emerald-950',
-    '3': 'border-amber-300 bg-amber-50 text-amber-950',
+    '3': 'border-violet-300 bg-violet-50 text-violet-950',
     '4': 'border-pup-maroon/30 bg-pup-maroon-pale text-pup-maroon-deep',
     unknown: 'border-gray-200 bg-gray-50 text-gray-800',
 };
@@ -151,6 +151,24 @@ function isExceptionSlot(slot: DailySlot): boolean {
         || ['cancellation', 'room_change', 'special_class', 'makeup_class'].includes(slot.event_type);
 }
 
+function isCancelledSlot(slot: DailySlot): boolean {
+    return slot.event_type === 'cancellation' || ['cancelled', 'auto_cancelled'].includes(slot.status);
+}
+
+function statusDotClass(slot: DailySlot): string {
+    if (!isClassSlot(slot)) return 'hidden';
+
+    if (slot.status === 'ongoing') {
+        return 'border-status-occupied bg-status-occupied';
+    }
+
+    if (slot.status === 'completed') {
+        return 'border-status-available bg-status-available';
+    }
+
+    return 'border-gray-300 bg-white';
+}
+
 function slotsOverlap(first: DailySlot, second: DailySlot): boolean {
     return parseMinutes(first.start_time) < parseMinutes(second.end_time)
         && parseMinutes(first.end_time) > parseMinutes(second.start_time);
@@ -206,7 +224,7 @@ function overrideHasAffectedClass(slot: DailySlot, slots: DailySlot[]): boolean 
 function slotBlockClass(slot: DailySlot, slots: DailySlot[]): string {
     if (isOverrideSlot(slot)) {
         const overlapState = overrideHasAffectedClass(slot, slots)
-            ? 'z-20 border-dashed opacity-75 shadow-none'
+            ? 'z-20 border-dashed opacity-80 shadow-none'
             : 'z-30';
 
         const overrideClass: Record<string, string> = {
@@ -218,32 +236,39 @@ function slotBlockClass(slot: DailySlot, slots: DailySlot[]): string {
         return `${overrideClass[slot.event_type] ?? overrideClass.maintenance} ${overlapState}`;
     }
 
-    const base = YEAR_LEVEL_CLASS[yearLevel(slot)];
-    const blocker = blockingOverride(slot, slots);
+    if (isCancelledSlot(slot)) {
+        return 'z-30 border-2 border-dashed border-gray-300 bg-gray-50 text-gray-500 opacity-80 shadow-none';
+    }
+
     const exceptionState = isExceptionSlot(slot)
-        ? 'border-2 border-pup-maroon/70 border-l-4 bg-white text-pup-maroon-deep shadow-sm'
+        ? 'z-30 border-2 border-pup-maroon/70 border-l-4 bg-white text-pup-maroon-deep shadow-sm'
         : '';
 
-    if (['cancelled', 'auto_cancelled'].includes(slot.status)) {
-        return `${isExceptionSlot(slot) ? exceptionState : base} z-30 opacity-60 grayscale`;
+    if (isExceptionSlot(slot)) {
+        return exceptionState;
     }
 
-    if (blocker) {
-        return `${isExceptionSlot(slot) ? exceptionState : base} z-40 shadow-sm`;
-    }
-
-    if (slot.status === 'ongoing') {
-        return `${isExceptionSlot(slot) ? exceptionState : base} z-30 ring-2 ring-green-400/60`;
-    }
-
-    return `${isExceptionSlot(slot) ? exceptionState : base} z-30`;
+    return `${YEAR_LEVEL_CLASS[yearLevel(slot)]} z-30`;
 }
 
 function slotBlockStyle(slot: DailySlot, slots: DailySlot[]): Record<string, string> {
-    if (isOverrideSlot(slot) && overrideHasAffectedClass(slot, slots)) {
+    if (isOverrideSlot(slot)) {
+        const overlayColor: Record<string, string> = {
+            maintenance: 'rgba(107, 114, 128, 0.18)',
+            unavailable: 'rgba(31, 41, 55, 0.14)',
+            reserved: 'rgba(245, 158, 11, 0.20)',
+        };
+        const color = overlayColor[slot.event_type] ?? overlayColor.maintenance;
+
+        return {
+            backgroundImage: `repeating-linear-gradient(135deg, ${color} 0px, ${color} 3px, transparent 3px, transparent 9px)`,
+        };
+    }
+
+    if (isCancelledSlot(slot)) {
         return {
             backgroundImage:
-                'repeating-linear-gradient(135deg, rgba(74, 11, 24, 0.14) 0px, rgba(74, 11, 24, 0.14) 3px, transparent 3px, transparent 9px)',
+                'repeating-linear-gradient(135deg, rgba(107, 114, 128, 0.12) 0px, rgba(107, 114, 128, 0.12) 3px, transparent 3px, transparent 9px)',
         };
     }
 

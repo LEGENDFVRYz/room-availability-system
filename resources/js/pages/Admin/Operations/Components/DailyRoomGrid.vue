@@ -20,10 +20,10 @@ const EVENT_TYPE_LABEL: Record<DailySlotType, string> = {
 };
 
 const STATUS_LABEL: Record<DailySlotStatus, string> = {
-    scheduled: 'Scheduled',
-    pending: 'Pending',
-    ongoing: 'Ongoing',
-    completed: 'Completed',
+    scheduled: 'Awaiting claim',
+    pending: 'Awaiting claim',
+    ongoing: 'Occupied',
+    completed: 'Finished',
     cancelled: 'Cancelled',
     auto_cancelled: 'Auto-cancelled',
     maintenance: 'Maintenance',
@@ -31,11 +31,11 @@ const STATUS_LABEL: Record<DailySlotStatus, string> = {
     reserved: 'Reserved',
 };
 
-const EXCEPTION_BADGE_CLASS = 'border border-pup-gold/50 bg-pup-gold-pale text-pup-maroon';
+const EXCEPTION_BADGE_CLASS = 'border border-pup-maroon/30 bg-white text-pup-maroon';
 
 const EVENT_BADGE: Record<DailySlotType, string> = {
     regular: 'bg-sky-100 text-sky-700',
-    cancellation: EXCEPTION_BADGE_CLASS,
+    cancellation: 'border border-gray-300 bg-gray-50 text-gray-500',
     room_change: EXCEPTION_BADGE_CLASS,
     special_class: EXCEPTION_BADGE_CLASS,
     makeup_class: EXCEPTION_BADGE_CLASS,
@@ -45,9 +45,9 @@ const EVENT_BADGE: Record<DailySlotType, string> = {
 };
 
 const STATUS_BADGE: Record<DailySlotStatus, string> = {
-    scheduled: 'bg-blue-50 text-blue-700',
-    pending: 'bg-amber-50 text-amber-700',
-    ongoing: 'bg-green-50 text-green-700',
+    scheduled: 'bg-gray-50 text-gray-600',
+    pending: 'bg-gray-50 text-gray-600',
+    ongoing: 'bg-status-occupied-bg text-status-occupied',
     completed: 'bg-gray-100 text-gray-600',
     cancelled: 'bg-slate-100 text-slate-600',
     auto_cancelled: 'bg-rose-50 text-rose-700',
@@ -60,7 +60,7 @@ const STATUS_BADGE: Record<DailySlotStatus, string> = {
 const YEAR_LEVEL_CLASS: Record<YearLevel, string> = {
     '1': 'border-sky-300 bg-sky-50 text-sky-950',
     '2': 'border-emerald-300 bg-emerald-50 text-emerald-950',
-    '3': 'border-amber-300 bg-amber-50 text-amber-950',
+    '3': 'border-violet-300 bg-violet-50 text-violet-950',
     '4': 'border-pup-maroon/30 bg-pup-maroon-pale text-pup-maroon-deep',
     unknown: 'border-gray-200 bg-gray-50 text-gray-800',
 };
@@ -168,6 +168,10 @@ function blockingOverrideDetails(slot: DailySlot, slots: DailySlot[]): string {
     return override ? `${EVENT_TYPE_LABEL[override.event_type]} · ${formatTimeRange(override)}` : '';
 }
 
+function isBlockedByOverride(slot: DailySlot, slots: DailySlot[]): boolean {
+    return isClassSlot(slot) && blockingOverride(slot, slots) !== null;
+}
+
 function overrideHasAffectedClass(slot: DailySlot, slots: DailySlot[]): boolean {
     if (!isOverrideSlot(slot)) return false;
 
@@ -179,11 +183,29 @@ function overrideHasAffectedClass(slot: DailySlot, slots: DailySlot[]): boolean 
     });
 }
 
+function isCancelledSlot(slot: DailySlot): boolean {
+    return slot.event_type === 'cancellation' || ['cancelled', 'auto_cancelled'].includes(slot.status);
+}
+
+function statusDotClass(slot: DailySlot): string {
+    if (!isClassSlot(slot)) return 'hidden';
+
+    if (slot.status === 'ongoing') {
+        return 'border-status-occupied bg-status-occupied';
+    }
+
+    if (slot.status === 'completed') {
+        return 'border-status-available bg-status-available';
+    }
+
+    return 'border-gray-300 bg-white';
+}
+
 function slotBlockClass(slot: DailySlot, slots: DailySlot[]): string {
     if (isOverrideSlot(slot)) {
         const overlapState = overrideHasAffectedClass(slot, slots)
-            ? 'z-20 border-dashed opacity-75 shadow-none'
-            : 'z-30';
+            ? 'z-50 shadow-sm group-hover/room:z-10 group-hover/room:opacity-30 group-hover/room:pointer-events-none'
+            : 'z-50';
 
         const overrideClass: Record<string, string> = {
             maintenance: 'border-status-maintenance bg-status-maintenance-bg text-pup-gray-800',
@@ -194,32 +216,39 @@ function slotBlockClass(slot: DailySlot, slots: DailySlot[]): string {
         return `${overrideClass[slot.event_type] ?? overrideClass.maintenance} ${overlapState}`;
     }
 
-    const base = YEAR_LEVEL_CLASS[yearLevel(slot)];
-    const blocker = blockingOverride(slot, slots);
-    const exceptionState = isExceptionSlot(slot)
-        ? 'border-2 border-pup-maroon/70 border-l-4 bg-white text-pup-maroon-deep shadow-sm'
-        : '';
+    const blockedState = isBlockedByOverride(slot, slots)
+        ? 'z-20 opacity-45 group-hover/room:z-40 group-hover/room:opacity-100 group-hover/room:shadow-md'
+        : 'z-30';
 
-    if (['cancelled', 'auto_cancelled'].includes(slot.status)) {
-        return `${isExceptionSlot(slot) ? exceptionState : base} z-30 opacity-60 grayscale`;
+    if (isCancelledSlot(slot)) {
+        return `${blockedState} border-2 border-dashed border-gray-300 bg-gray-50 text-gray-500 opacity-80 shadow-none`;
     }
 
-    if (blocker) {
-        return `${isExceptionSlot(slot) ? exceptionState : base} z-40 shadow-sm`;
+    if (isExceptionSlot(slot)) {
+        return `${blockedState} border-2 border-pup-maroon/70 border-l-4 bg-white text-pup-maroon-deep shadow-sm`;
     }
 
-    if (slot.status === 'ongoing') {
-        return `${isExceptionSlot(slot) ? exceptionState : base} z-30 ring-2 ring-green-400/60`;
-    }
-
-    return `${isExceptionSlot(slot) ? exceptionState : base} z-30`;
+    return `${YEAR_LEVEL_CLASS[yearLevel(slot)]} ${blockedState}`;
 }
 
 function slotBlockStyle(slot: DailySlot, slots: DailySlot[]): Record<string, string> {
-    if (isOverrideSlot(slot) && overrideHasAffectedClass(slot, slots)) {
+    if (isOverrideSlot(slot)) {
+        const overlayColor: Record<string, string> = {
+            maintenance: 'rgba(107, 114, 128, 0.18)',
+            unavailable: 'rgba(31, 41, 55, 0.14)',
+            reserved: 'rgba(245, 158, 11, 0.20)',
+        };
+        const color = overlayColor[slot.event_type] ?? overlayColor.maintenance;
+
+        return {
+            backgroundImage: `repeating-linear-gradient(135deg, ${color} 0px, ${color} 3px, transparent 3px, transparent 9px)`,
+        };
+    }
+
+    if (isCancelledSlot(slot)) {
         return {
             backgroundImage:
-                'repeating-linear-gradient(135deg, rgba(74, 11, 24, 0.14) 0px, rgba(74, 11, 24, 0.14) 3px, transparent 3px, transparent 9px)',
+                'repeating-linear-gradient(135deg, rgba(107, 114, 128, 0.12) 0px, rgba(107, 114, 128, 0.12) 3px, transparent 3px, transparent 9px)',
         };
     }
 
@@ -239,7 +268,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-    <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+    <div class="relative z-0 overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
         <div class="min-w-[1120px]">
             <div class="flex border-b border-pup-maroon-deep bg-pup-maroon text-white">
                 <div class="flex w-16 shrink-0 items-center justify-center border-r border-white/15 bg-pup-maroon-deep px-2 py-3 text-[10px] font-bold uppercase tracking-wider text-pup-gold-light">
@@ -273,7 +302,7 @@ const emit = defineEmits<{
                 <div
                     v-for="room in rooms"
                     :key="room.id"
-                    class="relative min-w-[118px] flex-1 border-r border-gray-100 last:border-r-0"
+                    class="group/room relative min-w-[118px] flex-1 border-r border-gray-100 last:border-r-0"
                 >
                     <div
                         v-for="hour in hourLines"
@@ -289,10 +318,10 @@ const emit = defineEmits<{
                     />
 
                     <button
-                        v-for="slot in room.slots"
+                        v-for="slot in room.slots.filter((item) => !isOverrideSlot(item))"
                         :key="slot.id"
                         type="button"
-                        class="group absolute inset-x-1 overflow-hidden rounded-md border px-1.5 py-1 text-left shadow-sm transition hover:z-50 hover:brightness-95 hover:shadow-md"
+                        class="absolute inset-x-1 overflow-hidden rounded-md border px-1.5 py-1 text-left shadow-sm transition duration-150 hover:z-[60] hover:brightness-95 hover:shadow-md"
                         :class="slotBlockClass(slot, allSlots)"
                         :style="{
                             top: slotTop(slot.start_time) + 3 + 'px',
@@ -302,9 +331,18 @@ const emit = defineEmits<{
                         @click="emit('open-slot', slot)"
                     >
                         <div class="flex items-start justify-between gap-1">
-                            <p class="line-clamp-2 text-[11px] font-bold leading-snug">
-                                {{ slot.source === 'override' ? EVENT_TYPE_LABEL[slot.event_type] : slot.subject_code }}
-                            </p>
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-1.5">
+                                    <span
+                                        class="h-2 w-2 shrink-0 rounded-full border"
+                                        :class="statusDotClass(slot)"
+                                        :title="STATUS_LABEL[slot.status]"
+                                    />
+                                    <p class="line-clamp-2 text-[11px] font-bold leading-snug">
+                                        {{ slot.subject_code }}
+                                    </p>
+                                </div>
+                            </div>
                             <div class="flex shrink-0 flex-col items-end gap-1">
                                 <span
                                     v-if="blockingOverrideLabel(slot, allSlots)"
@@ -313,38 +351,60 @@ const emit = defineEmits<{
                                     Blocked
                                 </span>
                                 <span
-                                    v-if="isExceptionSlot(slot)"
+                                    v-if="isExceptionSlot(slot) && !isCancelledSlot(slot)"
                                     class="rounded border border-pup-maroon/25 bg-pup-maroon-pale px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-pup-maroon"
                                 >
                                     Exception
                                 </span>
+                                <span
+                                    v-if="isCancelledSlot(slot)"
+                                    class="rounded border border-gray-300 bg-white px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-gray-500"
+                                >
+                                    Cancelled
+                                </span>
                             </div>
                         </div>
 
-                        <template v-if="slot.source === 'override'">
-                            <p class="line-clamp-2 text-[10px] font-semibold leading-snug opacity-80">
-                                Room status override
-                            </p>
-                            <p class="mt-0.5 text-[10px] opacity-65">{{ formatTimeRange(slot) }}</p>
-                        </template>
-
-                        <template v-else>
-                            <p class="line-clamp-2 text-[10px] font-semibold leading-snug opacity-80">
-                                {{ slot.subject_title }}
-                            </p>
-                            <p class="mt-0.5 text-[10px] opacity-65">{{ formatTimeRange(slot) }}</p>
-                            <p class="truncate text-[10px] opacity-55">{{ slot.section }}</p>
-                            <p
-                                v-if="blockingOverrideLabel(slot, allSlots)"
-                                class="mt-0.5 truncate text-[9px] font-semibold text-pup-maroon"
-                            >
-                                {{ blockingOverrideLabel(slot, allSlots) }}
-                            </p>
-                            <p v-if="slot.event_type === 'room_change'" class="mt-0.5 truncate text-[9px] font-semibold opacity-70">
-                                From {{ slot.original_room_code }}
-                            </p>
-                        </template>
+                        <p class="line-clamp-2 text-[10px] font-semibold leading-snug opacity-80">
+                            {{ slot.subject_title }}
+                        </p>
+                        <p class="mt-0.5 text-[10px] opacity-65">{{ formatTimeRange(slot) }}</p>
+                        <p class="truncate text-[10px] opacity-55">{{ slot.section }}</p>
+                        <p
+                            v-if="blockingOverrideLabel(slot, allSlots)"
+                            class="mt-0.5 truncate text-[9px] font-semibold text-pup-maroon"
+                        >
+                            {{ blockingOverrideLabel(slot, allSlots) }}
+                        </p>
+                        <p v-if="slot.event_type === 'room_change'" class="mt-0.5 truncate text-[9px] font-semibold opacity-70">
+                            From {{ slot.original_room_code }}
+                        </p>
                     </button>
+
+                    <div
+                        v-for="slot in room.slots.filter((item) => isOverrideSlot(item))"
+                        :key="slot.id"
+                        class="pointer-events-none absolute inset-x-1 overflow-hidden rounded-md border px-1.5 py-1 text-left shadow-sm transition duration-150"
+                        :class="slotBlockClass(slot, allSlots)"
+                        :style="{
+                            top: slotTop(slot.start_time) + 3 + 'px',
+                            height: slotHeight(slot.start_time, slot.end_time) - 6 + 'px',
+                            ...slotBlockStyle(slot, allSlots),
+                        }"
+                    >
+                        <button
+                            type="button"
+                            class="pointer-events-auto absolute left-1/2 top-1.5 inline-flex max-w-[calc(100%-12px)] -translate-x-1/2 flex-col items-center rounded-md bg-white/90 px-2 py-1 text-center text-[10px] shadow-sm ring-1 ring-black/5 transition hover:bg-white hover:shadow-md"
+                            @click.stop="emit('open-slot', slot)"
+                        >
+                            <span class="truncate text-[10px] font-bold uppercase tracking-wide">
+                                {{ EVENT_TYPE_LABEL[slot.event_type] }}
+                            </span>
+                            <span class="text-[9px] font-medium opacity-75">
+                                {{ formatTimeRange(slot) }}
+                            </span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

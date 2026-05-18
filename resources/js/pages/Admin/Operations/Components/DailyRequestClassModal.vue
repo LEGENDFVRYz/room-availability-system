@@ -1,24 +1,7 @@
 <script setup lang="ts">
 import { X } from 'lucide-vue-next';
 import { reactive, watch } from 'vue';
-interface Room {
-    id: number;
-    code: string;
-    name: string;
-    type?: string;
-}
-
-interface ClassRequestPayload {
-    event_type: 'special_class' | 'makeup_class';
-    room_id: number | null;
-    subject_code: string;
-    subject_title: string;
-    section: string;
-    instructor_name: string;
-    start_time: string;
-    end_time: string;
-    reason: string;
-}
+import type { ClassRequestPayload, Room } from './type';
 
 const props = defineProps<{
     show: boolean;

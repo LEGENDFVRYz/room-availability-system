@@ -1,24 +1,7 @@
 <script setup lang="ts">
 import { CheckCircle2, ChevronDown, LayoutGrid, Table2 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
-interface Room {
-    id: number;
-    code: string;
-    name: string;
-    type?: string;
-}
-
-type DailySlotType =
-    | 'regular'
-    | 'cancellation'
-    | 'room_change'
-    | 'special_class'
-    | 'makeup_class'
-    | 'maintenance'
-    | 'unavailable'
-    | 'reserved';
-
-type ViewMode = 'room' | 'table';
+import type { DailySlotType, Room, ViewMode } from './type';
 
 const props = defineProps<{
     rooms: Room[];

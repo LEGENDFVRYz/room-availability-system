@@ -6,9 +6,10 @@ import ScheduleDeleteModal from './Components/ScheduleDeleteModal.vue';
 import RoomScheduleView, { type RoomEntry, type RoomSchedule } from './Components/RoomScheduleView.vue';
 import type { BreadcrumbItem, PageHeader } from '@/types';
 import { Head, usePage } from '@inertiajs/vue3';
-import { LayoutGrid, Building2, Plus } from 'lucide-vue-next';
+import { LayoutGrid, Building2, Plus, Upload } from 'lucide-vue-next';
 import { ref, computed } from 'vue';
 import type { SharedData } from '@/types';
+import ScheduleImportModal from './Components/ScheduleImportModal.vue';
 
 
 // Types
@@ -48,6 +49,7 @@ const scheduleTabs = [
 // --- Modal States
 const showScheduleModal = ref(false);
 const showDeleteModal   = ref(false);
+const showImportModal   = ref(false);
 const editingSchedule   = ref<ScheduleFormData | null>(null);
 const deletingSchedule  = ref<{
     id: number; subject_title: string; subject_code: string; section: string;
@@ -116,14 +118,25 @@ function closeDeleteModal() {
             <div class="flex items-center justify-between gap-3">
                 <PillTabs :tabs="scheduleTabs" />
                 
-                <button
-                    :disabled="!currentTerm"
-                    @click="openCreate"
-                    class="flex items-center gap-1.5 rounded-lg bg-pup-maroon px-3.5 py-2 text-sm font-medium text-white transition hover:bg-pup-maroon-deep disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                    <Plus class="h-4 w-4" />
-                    Add Schedule
-                </button>
+                <div class="flex items-center gap-2">
+                    <button
+                        :disabled="!currentTerm"
+                        @click="openCreate"
+                        class="flex items-center gap-1.5 rounded-lg bg-pup-maroon px-3.5 py-2 text-sm font-medium text-white transition hover:bg-pup-maroon-deep disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                        <Plus class="h-4 w-4" />
+                        Add Schedule
+                    </button>
+
+                    <button
+                        :disabled="!currentTerm"
+                        @click="showImportModal = true"
+                        class="flex items-center gap-1.5 rounded-lg border border-pup-maroon/20 bg-white px-3.5 py-2 text-sm font-medium text-pup-maroon shadow-sm transition hover:bg-pup-maroon/5 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                        <Upload class="h-4 w-4" />
+                        Import Schedule
+                    </button>
+                </div>
             </div>
 
             <RoomScheduleView
@@ -147,5 +160,12 @@ function closeDeleteModal() {
         v-if="showDeleteModal && deletingSchedule"
         :schedule="deletingSchedule"
         @close="closeDeleteModal"
+    />
+
+    <ScheduleImportModal
+        v-if="showImportModal"
+        :current-term="currentTerm"
+        :rooms="rooms"
+        @close="showImportModal = false"
     />
 </template>

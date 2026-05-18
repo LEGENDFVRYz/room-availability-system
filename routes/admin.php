@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ManageController;
 use App\Http\Controllers\Admin\OperationController;
 use App\Http\Controllers\Admin\ScheduleController;
+use App\Http\Controllers\Admin\ScheduleImportController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -37,8 +38,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified'])->group(
     Route::get('/schedules/sections',             [ScheduleController::class, 'sections'])->name('schedules.sections');
     Route::get('/schedules/rooms',                [ScheduleController::class, 'rooms'])->name('schedules.rooms');
     Route::post('/schedules',                     [ScheduleController::class, 'store'])->name('schedules.store');
+    Route::post('/schedules/import',              [ScheduleImportController::class, '__invoke'])->name('schedules.import');
     Route::patch('/schedules/{schedule}',         [ScheduleController::class, 'update'])->name('schedules.update');
     Route::delete('/schedules/{schedule}',        [ScheduleController::class, 'destroy'])->name('schedules.destroy');
+    
 
     # Operations 
     Route::redirect('/operations', '/admin/operations/daily')->name('operations');

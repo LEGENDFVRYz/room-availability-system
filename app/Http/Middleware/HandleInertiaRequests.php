@@ -52,6 +52,7 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'success' => $request->session()->get('success'),
                 'error'   => $request->session()->get('error'),
+                'schedule_import' => fn () => $request->session()->get('schedule_import'),
             ],
 
             // Share globally as 'currentTerm' prop

@@ -13,6 +13,8 @@ class DatabaseSeeder extends Seeder
             AcademicTermSeeder::class,
             RoomSeeder::class,
             ScheduleSeeder::class,
+            RoomOverrideSeeder::class,
+            ScheduleExceptionSeeder::class,
         ]);
     }
 }

@@ -2,7 +2,7 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import PillTabs from '@/components/PillTabs.vue';
 import type { BreadcrumbItem, PageHeader } from '@/types';
-import { Head, usePage } from '@inertiajs/vue3';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import {
     AlertCircle, ArrowRightLeft, Ban, CalendarDays, CheckCircle2, Clock3, ChevronDown, Eye, 
     LayoutGrid, ListFilter, Play, Plus, RefreshCw, School, Sparkles, Table2, X, 
@@ -34,7 +34,7 @@ type DailySlotType = 'regular' | 'cancellation' | 'room_change' | 'special_class
 type DailySlotStatus = 'scheduled' | 'pending' | 'ongoing' | 'completed' | 'cancelled' | 'auto_cancelled';
 
 interface DailySlot {
-    id: number;
+    id: number | string;
     schedule_id?: number | null;
     exception_id?: number | null;
     room_id: number;
@@ -108,244 +108,8 @@ const GRID_HEIGHT = (END_HOUR - START_HOUR) * HOUR_HEIGHT;
 const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, index) => START_HOUR + index);
 const hourLines = hours.slice(0, -1);
 
-const sampleRooms: Room[] = [
-    { id: 1, code: 'CEA300', name: 'CPE Lecture Room 1', type: 'classroom' },
-    { id: 2, code: 'CEA316', name: 'CPE Laboratory 1', type: 'laboratory' },
-    { id: 3, code: 'CEA315', name: 'CPE Lecture Room 2', type: 'classroom' },
-    { id: 4, code: 'CEA314', name: 'CPE Laboratory 2', type: 'laboratory' },
-    { id: 5, code: 'CEA313', name: 'CPE Lecture Room 3', type: 'classroom' },
-    { id: 6, code: 'CEA312', name: 'CPE Laboratory 3', type: 'laboratory' },
-    { id: 7, code: 'CEA311', name: 'CPE Lecture Room 4', type: 'classroom' },
-    { id: 8, code: 'CEA310', name: 'CPE Lecture Room 5', type: 'classroom' },
-    { id: 9, code: 'CEA413', name: 'CPE Laboratory 4', type: 'laboratory' },
-    { id: 10, code: 'CEA207', name: 'CPE Lecture Room 6', type: 'classroom' },
-];
-
-const createSampleSlots = (date: string): DailySlot[] => [
-    {
-        id: 101,
-        schedule_id: 101,
-        room_id: 1,
-        event_date: date,
-        source: 'schedule',
-        event_type: 'regular',
-        status: 'scheduled',
-        subject_code: 'CMPE 364',
-        subject_title: 'Web and Mobile Systems',
-        section: 'BSCPE 3-6',
-        instructor_name: 'A. Canlas',
-        start_time: '08:00',
-        end_time: '10:30',
-    },
-    {
-        id: 102,
-        schedule_id: 102,
-        exception_id: 202,
-        room_id: 1,
-        event_date: date,
-        source: 'exception',
-        event_type: 'cancellation',
-        status: 'cancelled',
-        subject_code: 'CMPE 361',
-        subject_title: 'Enterprise Networking',
-        section: 'BSCPE 1-IP',
-        instructor_name: 'J. Binuya',
-        start_time: '12:30',
-        end_time: '14:00',
-        reason: 'Instructor unavailable today.',
-    },
-    {
-        id: 103,
-        schedule_id: 103,
-        room_id: 1,
-        event_date: date,
-        source: 'schedule',
-        event_type: 'regular',
-        status: 'scheduled',
-        subject_code: 'CMPE 310',
-        subject_title: 'Computer Networks',
-        section: 'BSCPE 3-4',
-        instructor_name: 'L. Reyes',
-        start_time: '15:00',
-        end_time: '17:30',
-    },
-    {
-        id: 104,
-        schedule_id: 104,
-        room_id: 3,
-        event_date: date,
-        source: 'schedule',
-        event_type: 'regular',
-        status: 'scheduled',
-        subject_code: 'CMPE 311',
-        subject_title: 'Microprocessor',
-        section: 'BSCPE 3-5',
-        instructor_name: 'J. Cansino',
-        start_time: '08:00',
-        end_time: '10:00',
-    },
-    {
-        id: 105,
-        schedule_id: 105,
-        room_id: 3,
-        event_date: date,
-        source: 'schedule',
-        event_type: 'regular',
-        status: 'scheduled',
-        subject_code: 'CMPE 311',
-        subject_title: 'Microprocessor',
-        section: 'BSCPE 3-7',
-        instructor_name: 'J. Cansino',
-        start_time: '10:30',
-        end_time: '13:00',
-    },
-    {
-        id: 106,
-        schedule_id: 106,
-        exception_id: 206,
-        room_id: 3,
-        original_room_id: 7,
-        original_room_code: 'CEA311',
-        event_date: date,
-        source: 'exception',
-        event_type: 'room_change',
-        status: 'pending',
-        subject_code: 'CMPE 011',
-        subject_title: 'Computer Programming',
-        section: 'BSCPE 1-3',
-        instructor_name: 'J. Nicolas',
-        start_time: '14:00',
-        end_time: '16:30',
-        reason: 'Original room unavailable.',
-    },
-    {
-        id: 107,
-        schedule_id: 107,
-        room_id: 4,
-        event_date: date,
-        source: 'schedule',
-        event_type: 'regular',
-        status: 'scheduled',
-        subject_code: 'CMPE 203',
-        subject_title: 'Numerical Methods',
-        section: 'BSCPE 2-6',
-        instructor_name: 'L. Lacatan',
-        start_time: '08:00',
-        end_time: '10:00',
-    },
-    {
-        id: 108,
-        schedule_id: 108,
-        room_id: 4,
-        event_date: date,
-        source: 'schedule',
-        event_type: 'regular',
-        status: 'scheduled',
-        subject_code: 'CMPE 204',
-        subject_title: 'Advanced Math',
-        section: 'BSCPE 2-4',
-        instructor_name: 'J. Rodriguez',
-        start_time: '14:00',
-        end_time: '15:30',
-    },
-    {
-        id: 109,
-        schedule_id: 109,
-        room_id: 4,
-        event_date: date,
-        source: 'schedule',
-        event_type: 'regular',
-        status: 'ongoing',
-        subject_code: 'CMPE 462',
-        subject_title: 'Neural Networks',
-        section: 'BSCPE 4-1',
-        instructor_name: 'M. Malbog',
-        start_time: '15:30',
-        end_time: '17:00',
-    },
-    {
-        id: 110,
-        schedule_id: 110,
-        room_id: 5,
-        event_date: date,
-        source: 'schedule',
-        event_type: 'regular',
-        status: 'scheduled',
-        subject_code: 'CMPE 011',
-        subject_title: 'Computer Programming',
-        section: 'BSCPE 1-1',
-        instructor_name: 'A. Racusa',
-        start_time: '08:00',
-        end_time: '13:00',
-    },
-    {
-        id: 111,
-        schedule_id: 111,
-        room_id: 6,
-        event_date: date,
-        source: 'schedule',
-        event_type: 'regular',
-        status: 'scheduled',
-        subject_code: 'CMPE 310',
-        subject_title: 'Computer Networks',
-        section: 'BSCPE 3-7',
-        instructor_name: 'J. Binuya',
-        start_time: '08:00',
-        end_time: '10:00',
-    },
-    {
-        id: 112,
-        schedule_id: 112,
-        exception_id: 212,
-        room_id: 6,
-        event_date: date,
-        source: 'exception',
-        event_type: 'special_class',
-        status: 'pending',
-        subject_code: 'CMPE 499',
-        subject_title: 'Capstone Consultation',
-        section: 'BSCPE 4-2',
-        instructor_name: 'M. Bautista',
-        start_time: '13:00',
-        end_time: '15:00',
-        reason: 'Special consultation session.',
-    },
-    {
-        id: 113,
-        schedule_id: 113,
-        room_id: 7,
-        event_date: date,
-        source: 'schedule',
-        event_type: 'regular',
-        status: 'scheduled',
-        subject_code: 'CMPE 311',
-        subject_title: 'Microprocessor',
-        section: 'BSCPE 3-3',
-        instructor_name: 'R. Mahaguay',
-        start_time: '08:00',
-        end_time: '10:00',
-    },
-    {
-        id: 114,
-        exception_id: 214,
-        schedule_id: null,
-        room_id: 9,
-        event_date: date,
-        source: 'exception',
-        event_type: 'makeup_class',
-        status: 'pending',
-        subject_code: 'ENSC 411',
-        subject_title: 'Technopreneurship 101',
-        section: 'BSCPE 3-2',
-        instructor_name: 'J. Tena',
-        start_time: '18:00',
-        end_time: '20:00',
-        reason: 'Makeup class for missed session.',
-    },
-];
-
-const rooms = computed<Room[]>(() => (props.rooms.length ? props.rooms : sampleRooms));
-const sourceSlots = computed<DailySlot[]>(() => (props.daily_schedules.length ? props.daily_schedules : createSampleSlots(selectedDate.value)));
+const rooms = computed<Room[]>(() => props.rooms);
+const sourceSlots = computed<DailySlot[]>(() => props.daily_schedules);
 const localSlots = ref<DailySlot[]>([]);
 
 watch(
@@ -422,11 +186,19 @@ const lastUpdatedLabel = computed(() => {
 });
 
 function refreshDailyOperations() {
-    currentDateTime.value = new Date();
-    lastUpdatedAt.value = new Date();
+    window.location.reload();
+}
 
-    // Backend wiring later:
-    // router.reload({ only: ['daily_schedules', 'rooms'], preserveScroll: true });
+function goToSelectedDate() {
+    router.get(
+        '/admin/operations/daily',
+        { selected_date: selectedDate.value },
+        {
+            preserveScroll: true,
+            preserveState: false,
+            replace: true,
+        },
+    );
 }
 
 const filteredSlots = computed(() => {
@@ -538,6 +310,51 @@ const STATUS_BADGE: Record<DailySlotStatus, string> = {
     auto_cancelled: 'bg-rose-50 text-rose-700',
 };
 
+type YearLevel = '1' | '2' | '3' | '4' | 'unknown';
+
+const YEAR_LEVEL_CLASS: Record<YearLevel, string> = {
+    '1': 'border-sky-300 bg-sky-50 text-sky-950',
+    '2': 'border-emerald-300 bg-emerald-50 text-emerald-950',
+    '3': 'border-amber-300 bg-amber-50 text-amber-950',
+    '4': 'border-pup-maroon/30 bg-pup-maroon-pale text-pup-maroon-deep',
+    unknown: 'border-gray-200 bg-gray-50 text-gray-800',
+};
+
+const YEAR_LEVEL_BADGE: Record<YearLevel, string> = {
+    '1': 'bg-sky-100 text-sky-700',
+    '2': 'bg-emerald-100 text-emerald-700',
+    '3': 'bg-amber-100 text-amber-700',
+    '4': 'bg-pup-maroon text-white',
+    unknown: 'bg-gray-200 text-gray-600',
+};
+
+function yearLevel(slot: DailySlot): YearLevel {
+    const section = slot.section ?? '';
+    const bscpeMatch = section.match(/BSCPE\s*([1-4])/i);
+    const fallbackMatch = section.match(/(?:^|\s)([1-4])(?:[-\s]|$)/);
+    const value = bscpeMatch?.[1] ?? fallbackMatch?.[1];
+
+    return ['1', '2', '3', '4'].includes(value ?? '') ? (value as YearLevel) : 'unknown';
+}
+
+function yearLevelLabel(slot: DailySlot): string {
+    const level = yearLevel(slot);
+    return level === 'unknown' ? 'YR ?' : `YR ${level}`;
+}
+
+function slotBlockClass(slot: DailySlot): string {
+    const base = YEAR_LEVEL_CLASS[yearLevel(slot)];
+
+    if (['cancelled', 'auto_cancelled'].includes(slot.status)) {
+        return `${base} opacity-60 grayscale`;
+    }
+
+    if (slot.status === 'ongoing') {
+        return `${base} ring-2 ring-green-400/60`;
+    }
+
+    return base;
+}
 
 const parseMinutes = (time: string) => {
     const [hour, minute] = time.split(':').map(Number);
@@ -798,6 +615,7 @@ onUnmounted(() => {
                             <input
                                 v-model="selectedDate"
                                 type="date"
+                                @change="goToSelectedDate"
                                 class="h-11 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 shadow-sm transition focus:border-pup-maroon focus:ring-2 focus:ring-pup-maroon/15"
                             />
                         </label>
@@ -940,7 +758,7 @@ onUnmounted(() => {
                                 :key="slot.id"
                                 type="button"
                                 class="group absolute inset-x-1 overflow-hidden rounded-md border px-1.5 py-1 text-left shadow-sm transition hover:z-20 hover:brightness-95 hover:shadow-md"
-                                :class="EVENT_CLASS[slot.event_type]"
+                                :class="slotBlockClass(slot)"
                                 :style="{
                                     top: slotTop(slot.start_time) + 3 + 'px',
                                     height: slotHeight(slot.start_time, slot.end_time) - 6 + 'px',
@@ -951,13 +769,21 @@ onUnmounted(() => {
                                     <p class="line-clamp-2 text-[11px] font-bold leading-snug">
                                         {{ slot.subject_code }}
                                     </p>
-                                    <span
-                                        v-if="slot.event_type !== 'regular'"
-                                        class="shrink-0 rounded px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide"
-                                        :class="EVENT_BADGE[slot.event_type]"
-                                    >
-                                        {{ EVENT_TYPE_LABEL[slot.event_type].split(' ')[0] }}
-                                    </span>
+                                    <div class="flex shrink-0 flex-col items-end gap-1">
+                                        <span
+                                            class="rounded px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide"
+                                            :class="YEAR_LEVEL_BADGE[yearLevel(slot)]"
+                                        >
+                                            {{ yearLevelLabel(slot) }}
+                                        </span>
+                                        <span
+                                            v-if="slot.event_type !== 'regular'"
+                                            class="rounded px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide"
+                                            :class="EVENT_BADGE[slot.event_type]"
+                                        >
+                                            {{ EVENT_TYPE_LABEL[slot.event_type].split(' ')[0] }}
+                                        </span>
+                                    </div>
                                 </div>
                                 <p class="line-clamp-2 text-[10px] font-semibold leading-snug opacity-80">
                                     {{ slot.subject_title }}

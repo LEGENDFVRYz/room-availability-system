@@ -1,9 +1,12 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import type { DailySlot, DailySlotStatus, DailySlotType, RoomWithSlots, YearLevel } from './type';
 
 const START_HOUR = 7;
 const END_HOUR = 21;
 const HOUR_HEIGHT = 76;
+const TIME_COLUMN_WIDTH = 64;
+const ROOM_COLUMN_WIDTH = 118;
 const GRID_HEIGHT = (END_HOUR - START_HOUR) * HOUR_HEIGHT;
 const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, index) => START_HOUR + index);
 const hourLines = hours.slice(0, -1);
@@ -56,7 +59,6 @@ const STATUS_BADGE: Record<DailySlotStatus, string> = {
     reserved: 'bg-status-reserved-bg text-status-reserved',
 };
 
-
 const YEAR_LEVEL_CLASS: Record<YearLevel, string> = {
     '1': 'border-sky-300 bg-sky-50 text-sky-950',
     '2': 'border-emerald-300 bg-emerald-50 text-emerald-950',
@@ -65,8 +67,12 @@ const YEAR_LEVEL_CLASS: Record<YearLevel, string> = {
     unknown: 'border-gray-200 bg-gray-50 text-gray-800',
 };
 
-function todayIso(): string {
-    return new Date().toISOString().slice(0, 10);
+function todayIso(date = new Date()): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
 }
 
 function parseMinutes(time: string): number {
@@ -101,6 +107,13 @@ function formatTime(time: string): string {
     return `${hour % 12 || 12}:${minute.toString().padStart(2, '0')}${hour < 12 ? 'AM' : 'PM'}`;
 }
 
+function formatMinutes(minutes: number): string {
+    const hour = Math.floor(minutes / 60);
+    const minute = minutes % 60;
+
+    return `${hour % 12 || 12}:${minute.toString().padStart(2, '0')}${hour < 12 ? 'AM' : 'PM'}`;
+}
+
 function formatTimeRange(slot: DailySlot): string {
     return `${formatTime(slot.start_time)}–${formatTime(slot.end_time)}`;
 }
@@ -123,22 +136,18 @@ function isClassSlot(slot: DailySlot): boolean {
 }
 
 function isExceptionSlot(slot: DailySlot): boolean {
-    return slot.source === 'exception'
-        || ['cancellation', 'room_change', 'special_class', 'makeup_class'].includes(slot.event_type);
+    return slot.source === 'exception' || ['cancellation', 'room_change', 'special_class', 'makeup_class'].includes(slot.event_type);
 }
 
 function slotsOverlap(first: DailySlot, second: DailySlot): boolean {
-    return parseMinutes(first.start_time) < parseMinutes(second.end_time)
-        && parseMinutes(first.end_time) > parseMinutes(second.start_time);
+    return parseMinutes(first.start_time) < parseMinutes(second.end_time) && parseMinutes(first.end_time) > parseMinutes(second.start_time);
 }
 
 function overlappingOverrides(slot: DailySlot, slots: DailySlot[]): DailySlot[] {
     if (isOverrideSlot(slot)) return [];
 
     return slots.filter((candidate) => {
-        return isOverrideSlot(candidate)
-            && candidate.room_id === slot.room_id
-            && slotsOverlap(slot, candidate);
+        return isOverrideSlot(candidate) && candidate.room_id === slot.room_id && slotsOverlap(slot, candidate);
     });
 }
 
@@ -176,10 +185,12 @@ function overrideHasAffectedClass(slot: DailySlot, slots: DailySlot[]): boolean 
     if (!isOverrideSlot(slot)) return false;
 
     return slots.some((candidate) => {
-        return isClassSlot(candidate)
-            && candidate.room_id === slot.room_id
-            && !['cancelled', 'auto_cancelled'].includes(candidate.status)
-            && slotsOverlap(slot, candidate);
+        return (
+            isClassSlot(candidate) &&
+            candidate.room_id === slot.room_id &&
+            !['cancelled', 'auto_cancelled'].includes(candidate.status) &&
+            slotsOverlap(slot, candidate)
+        );
     });
 }
 
@@ -255,12 +266,36 @@ function slotBlockStyle(slot: DailySlot, slots: DailySlot[]): Record<string, str
     return {};
 }
 
-
-
 const props = defineProps<{
     rooms: RoomWithSlots[];
     allSlots: DailySlot[];
+    selectedDate: string;
+    currentDateTime: Date | string;
 }>();
+
+const gridMinWidth = computed(() => `${TIME_COLUMN_WIDTH + props.rooms.length * ROOM_COLUMN_WIDTH}px`);
+
+const activeNow = computed(() => {
+    const now = props.currentDateTime instanceof Date ? props.currentDateTime : new Date(props.currentDateTime);
+
+    if (Number.isNaN(now.getTime()) || props.selectedDate !== todayIso(now)) {
+        return null;
+    }
+
+    return now.getHours() * 60 + now.getMinutes();
+});
+
+const currentTimeTop = computed(() => {
+    if (activeNow.value === null) return null;
+
+    return ((clampMinutes(activeNow.value) - visibleStartMinutes) / 60) * HOUR_HEIGHT;
+});
+
+const showCurrentTimeMarker = computed(() => {
+    return activeNow.value !== null && activeNow.value >= visibleStartMinutes && activeNow.value <= visibleEndMinutes;
+});
+
+const currentTimeLabel = computed(() => (activeNow.value === null ? '' : formatMinutes(activeNow.value)));
 
 const emit = defineEmits<{
     'open-slot': [slot: DailySlot];
@@ -268,142 +303,149 @@ const emit = defineEmits<{
 </script>
 
 <template>
-    <div class="relative z-0 overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
-        <div class="min-w-[1120px]">
-            <div class="flex border-b border-pup-maroon-deep bg-pup-maroon text-white">
-                <div class="flex w-16 shrink-0 items-center justify-center border-r border-white/15 bg-pup-maroon-deep px-2 py-3 text-[10px] font-bold uppercase tracking-wider text-pup-gold-light">
-                    Time
-                </div>
-                <div
-                    v-for="room in rooms"
-                    :key="room.id"
-                    class="flex min-w-[118px] flex-1 items-center justify-center border-r border-white/10 px-1.5 py-3 last:border-r-0"
-                >
-                    <span class="font-mono text-xs font-bold tracking-wide text-white">
-                        {{ room.code }}
-                    </span>
-                </div>
-            </div>
-
-            <div class="flex" :style="{ height: GRID_HEIGHT + 'px' }">
-                <div class="relative w-16 shrink-0 border-r border-gray-200 bg-gray-50/80">
+    <div class="relative z-0 rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div class="overflow-x-auto overflow-y-hidden rounded-md">
+            <div class="w-full" :style="{ minWidth: gridMinWidth }">
+                <div class="flex border-b border-pup-maroon-deep bg-pup-maroon text-white">
                     <div
-                        v-for="hour in hours"
-                        :key="hour"
-                        class="absolute right-0 flex w-full items-center justify-end pr-2"
-                        :style="{ top: ((hour - START_HOUR) * HOUR_HEIGHT - 8) + 'px' }"
+                        class="sticky left-0 z-30 flex w-16 shrink-0 items-center justify-center border-r border-white/15 bg-pup-maroon-deep px-2 py-3 text-[10px] font-bold uppercase tracking-wider text-pup-gold-light shadow-[8px_0_12px_-12px_rgba(0,0,0,0.6)]"
                     >
-                        <span class="text-[10px] font-medium leading-none text-gray-400">
-                            {{ formatHour(hour) }}
+                        Time
+                    </div>
+                    <div
+                        v-for="room in rooms"
+                        :key="room.id"
+                        class="flex min-w-[118px] flex-1 items-center justify-center border-r border-white/10 px-1.5 py-3 last:border-r-0"
+                    >
+                        <span class="font-mono text-xs font-bold tracking-wide text-white">
+                            {{ room.code }}
                         </span>
                     </div>
                 </div>
 
-                <div
-                    v-for="room in rooms"
-                    :key="room.id"
-                    class="group/room relative min-w-[118px] flex-1 border-r border-gray-100 last:border-r-0"
-                >
-                    <div
-                        v-for="hour in hourLines"
-                        :key="`line-${room.id}-${hour}`"
-                        class="pointer-events-none absolute inset-x-0 border-t border-gray-100"
-                        :style="{ top: ((hour - START_HOUR) * HOUR_HEIGHT) + 'px' }"
-                    />
-                    <div
-                        v-for="hour in hourLines"
-                        :key="`half-${room.id}-${hour}`"
-                        class="pointer-events-none absolute inset-x-0 border-t border-dashed border-gray-50"
-                        :style="{ top: ((hour - START_HOUR) * HOUR_HEIGHT + HOUR_HEIGHT / 2) + 'px' }"
-                    />
+                <div class="relative flex" :style="{ minHeight: GRID_HEIGHT + 'px' }">
+                    <div class="sticky left-0 z-[50] w-16 shrink-0 border-r border-gray-200 bg-gray-50/95 shadow-[8px_0_12px_-12px_rgba(0,0,0,0.35)]">
+                        <div
+                            v-for="hour in hours"
+                            :key="hour"
+                            class="absolute right-0 flex w-full items-center justify-end pr-2 z-[200]"
+                            :style="{ top: (hour - START_HOUR) * HOUR_HEIGHT - 8 + 'px' }"
+                        >
+                            <span class="text-[10px] font-medium leading-none text-gray-400">
+                                {{ formatHour(hour) }}
+                            </span>
+                        </div>
+                    </div>
 
-                    <button
-                        v-for="slot in room.slots.filter((item) => !isOverrideSlot(item))"
-                        :key="slot.id"
-                        type="button"
-                        class="absolute inset-x-1 overflow-hidden rounded-md border px-1.5 py-1 text-left shadow-sm transition duration-150 hover:z-[60] hover:brightness-95 hover:shadow-md"
-                        :class="slotBlockClass(slot, allSlots)"
-                        :style="{
-                            top: slotTop(slot.start_time) + 3 + 'px',
-                            height: slotHeight(slot.start_time, slot.end_time) - 6 + 'px',
-                            ...slotBlockStyle(slot, allSlots),
-                        }"
-                        @click="emit('open-slot', slot)"
-                    >
-                        <div class="flex items-start justify-between gap-1">
-                            <div class="min-w-0">
-                                <div class="flex items-center gap-1.5">
+                    <div v-if="showCurrentTimeMarker" class="pointer-events-none absolute inset-x-0 z-[55]" :style="{ top: currentTimeTop + 'px' }">
+                        <div class="relative border-t-2 border-pup-maroon">
+                            <span
+                                class="sticky left-1 inline-flex -translate-y-1/2 items-center rounded-full bg-pup-maroon px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm ring-2 ring-white"
+                            >
+                                Now · {{ currentTimeLabel }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div v-for="room in rooms" :key="room.id" class="group/room relative min-w-[118px] flex-1 border-r border-gray-100 last:border-r-0">
+                        <div
+                            v-for="hour in hourLines"
+                            :key="`line-${room.id}-${hour}`"
+                            class="pointer-events-none absolute inset-x-0 border-t border-gray-100"
+                            :style="{ top: (hour - START_HOUR) * HOUR_HEIGHT + 'px' }"
+                        />
+                        <div
+                            v-for="hour in hourLines"
+                            :key="`half-${room.id}-${hour}`"
+                            class="pointer-events-none absolute inset-x-0 border-t border-dashed border-gray-50"
+                            :style="{
+                                top: (hour - START_HOUR) * HOUR_HEIGHT + HOUR_HEIGHT / 2 + 'px',
+                            }"
+                        />
+
+                        <button
+                            v-for="slot in room.slots.filter((item) => !isOverrideSlot(item))"
+                            :key="slot.id"
+                            type="button"
+                            class="absolute inset-x-1 overflow-hidden rounded-md border px-1.5 py-1 text-left shadow-sm transition duration-150 hover:z-[60] hover:brightness-95 hover:shadow-md"
+                            :class="slotBlockClass(slot, allSlots)"
+                            :style="{
+                                top: slotTop(slot.start_time) + 3 + 'px',
+                                height: slotHeight(slot.start_time, slot.end_time) - 6 + 'px',
+                                ...slotBlockStyle(slot, allSlots),
+                            }"
+                            @click="emit('open-slot', slot)"
+                        >
+                            <div class="flex items-start justify-between gap-1">
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="h-2 w-2 shrink-0 rounded-full border" :class="statusDotClass(slot)" :title="STATUS_LABEL[slot.status]" />
+                                        <p class="line-clamp-2 text-[11px] font-bold leading-snug">
+                                            {{ slot.subject_code }}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="flex shrink-0 flex-col items-end gap-1">
                                     <span
-                                        class="h-2 w-2 shrink-0 rounded-full border"
-                                        :class="statusDotClass(slot)"
-                                        :title="STATUS_LABEL[slot.status]"
-                                    />
-                                    <p class="line-clamp-2 text-[11px] font-bold leading-snug">
-                                        {{ slot.subject_code }}
-                                    </p>
+                                        v-if="blockingOverrideLabel(slot, allSlots)"
+                                        class="rounded bg-pup-maroon/90 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white"
+                                    >
+                                        Blocked
+                                    </span>
+                                    <span
+                                        v-if="isExceptionSlot(slot) && !isCancelledSlot(slot)"
+                                        class="rounded border border-pup-maroon/25 bg-pup-maroon-pale px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-pup-maroon"
+                                    >
+                                        Exception
+                                    </span>
+                                    <span
+                                        v-if="isCancelledSlot(slot)"
+                                        class="rounded border border-gray-300 bg-white px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-gray-500"
+                                    >
+                                        Cancelled
+                                    </span>
                                 </div>
                             </div>
-                            <div class="flex shrink-0 flex-col items-end gap-1">
-                                <span
-                                    v-if="blockingOverrideLabel(slot, allSlots)"
-                                    class="rounded bg-pup-maroon/90 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white"
-                                >
-                                    Blocked
-                                </span>
-                                <span
-                                    v-if="isExceptionSlot(slot) && !isCancelledSlot(slot)"
-                                    class="rounded border border-pup-maroon/25 bg-pup-maroon-pale px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-pup-maroon"
-                                >
-                                    Exception
-                                </span>
-                                <span
-                                    v-if="isCancelledSlot(slot)"
-                                    class="rounded border border-gray-300 bg-white px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-gray-500"
-                                >
-                                    Cancelled
-                                </span>
-                            </div>
-                        </div>
 
-                        <p class="line-clamp-2 text-[10px] font-semibold leading-snug opacity-80">
-                            {{ slot.subject_title }}
-                        </p>
-                        <p class="mt-0.5 text-[10px] opacity-65">{{ formatTimeRange(slot) }}</p>
-                        <p class="truncate text-[10px] opacity-55">{{ slot.section }}</p>
-                        <p
-                            v-if="blockingOverrideLabel(slot, allSlots)"
-                            class="mt-0.5 truncate text-[9px] font-semibold text-pup-maroon"
-                        >
-                            {{ blockingOverrideLabel(slot, allSlots) }}
-                        </p>
-                        <p v-if="slot.event_type === 'room_change'" class="mt-0.5 truncate text-[9px] font-semibold opacity-70">
-                            From {{ slot.original_room_code }}
-                        </p>
-                    </button>
-
-                    <div
-                        v-for="slot in room.slots.filter((item) => isOverrideSlot(item))"
-                        :key="slot.id"
-                        class="pointer-events-none absolute inset-x-1 overflow-hidden rounded-md border px-1.5 py-1 text-left shadow-sm transition duration-150"
-                        :class="slotBlockClass(slot, allSlots)"
-                        :style="{
-                            top: slotTop(slot.start_time) + 3 + 'px',
-                            height: slotHeight(slot.start_time, slot.end_time) - 6 + 'px',
-                            ...slotBlockStyle(slot, allSlots),
-                        }"
-                    >
-                        <button
-                            type="button"
-                            class="pointer-events-auto absolute left-1/2 top-1.5 inline-flex max-w-[calc(100%-12px)] -translate-x-1/2 flex-col items-center rounded-md bg-white/90 px-2 py-1 text-center text-[10px] shadow-sm ring-1 ring-black/5 transition hover:bg-white hover:shadow-md"
-                            @click.stop="emit('open-slot', slot)"
-                        >
-                            <span class="truncate text-[10px] font-bold uppercase tracking-wide">
-                                {{ EVENT_TYPE_LABEL[slot.event_type] }}
-                            </span>
-                            <span class="text-[9px] font-medium opacity-75">
+                            <p class="line-clamp-2 text-[10px] font-semibold leading-snug opacity-80">
+                                {{ slot.subject_title }}
+                            </p>
+                            <p class="mt-0.5 text-[10px] opacity-65">
                                 {{ formatTimeRange(slot) }}
-                            </span>
+                            </p>
+                            <p class="truncate text-[10px] opacity-55">{{ slot.section }}</p>
+                            <p v-if="blockingOverrideLabel(slot, allSlots)" class="mt-0.5 truncate text-[9px] font-semibold text-pup-maroon">
+                                {{ blockingOverrideLabel(slot, allSlots) }}
+                            </p>
+                            <p v-if="slot.event_type === 'room_change'" class="mt-0.5 truncate text-[9px] font-semibold opacity-70">
+                                From {{ slot.original_room_code }}
+                            </p>
                         </button>
+
+                        <div
+                            v-for="slot in room.slots.filter((item) => isOverrideSlot(item))"
+                            :key="slot.id"
+                            class="pointer-events-none absolute inset-x-1 overflow-hidden rounded-md border px-1.5 py-1 text-left shadow-sm transition duration-150"
+                            :class="slotBlockClass(slot, allSlots)"
+                            :style="{
+                                top: slotTop(slot.start_time) + 3 + 'px',
+                                height: slotHeight(slot.start_time, slot.end_time) - 6 + 'px',
+                                ...slotBlockStyle(slot, allSlots),
+                            }"
+                        >
+                            <button
+                                type="button"
+                                class="pointer-events-auto absolute left-1/2 top-1.5 inline-flex max-w-[calc(100%-12px)] -translate-x-1/2 flex-col items-center rounded-md bg-white/90 px-2 py-1 text-center text-[10px] shadow-sm ring-1 ring-black/5 transition hover:bg-white hover:shadow-md"
+                                @click.stop="emit('open-slot', slot)"
+                            >
+                                <span class="truncate text-[10px] font-bold uppercase tracking-wide">
+                                    {{ EVENT_TYPE_LABEL[slot.event_type] }}
+                                </span>
+                                <span class="text-[9px] font-medium opacity-75">
+                                    {{ formatTimeRange(slot) }}
+                                </span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

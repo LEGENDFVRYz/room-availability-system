@@ -58,7 +58,6 @@ const STATUS_BADGE: Record<DailySlotStatus, string> = {
     reserved: 'bg-status-reserved-bg text-status-reserved',
 };
 
-
 const YEAR_LEVEL_CLASS: Record<YearLevel, string> = {
     '1': 'border-sky-300 bg-sky-50 text-sky-950',
     '2': 'border-emerald-300 bg-emerald-50 text-emerald-950',
@@ -67,8 +66,12 @@ const YEAR_LEVEL_CLASS: Record<YearLevel, string> = {
     unknown: 'border-gray-200 bg-gray-50 text-gray-800',
 };
 
-function todayIso(): string {
-    return new Date().toISOString().slice(0, 10);
+function todayIso(date = new Date()): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
 }
 
 function parseMinutes(time: string): number {
@@ -103,6 +106,13 @@ function formatTime(time: string): string {
     return `${hour % 12 || 12}:${minute.toString().padStart(2, '0')}${hour < 12 ? 'AM' : 'PM'}`;
 }
 
+function formatMinutes(minutes: number): string {
+    const hour = Math.floor(minutes / 60);
+    const minute = minutes % 60;
+
+    return `${hour % 12 || 12}:${minute.toString().padStart(2, '0')}${hour < 12 ? 'AM' : 'PM'}`;
+}
+
 function formatTimeRange(slot: DailySlot): string {
     return `${formatTime(slot.start_time)}–${formatTime(slot.end_time)}`;
 }
@@ -125,8 +135,7 @@ function isClassSlot(slot: DailySlot): boolean {
 }
 
 function isExceptionSlot(slot: DailySlot): boolean {
-    return slot.source === 'exception'
-        || ['cancellation', 'room_change', 'special_class', 'makeup_class'].includes(slot.event_type);
+    return slot.source === 'exception' || ['cancellation', 'room_change', 'special_class', 'makeup_class'].includes(slot.event_type);
 }
 
 function isCancelledSlot(slot: DailySlot): boolean {
@@ -148,17 +157,14 @@ function statusDotClass(slot: DailySlot): string {
 }
 
 function slotsOverlap(first: DailySlot, second: DailySlot): boolean {
-    return parseMinutes(first.start_time) < parseMinutes(second.end_time)
-        && parseMinutes(first.end_time) > parseMinutes(second.start_time);
+    return parseMinutes(first.start_time) < parseMinutes(second.end_time) && parseMinutes(first.end_time) > parseMinutes(second.start_time);
 }
 
 function overlappingOverrides(slot: DailySlot, slots: DailySlot[]): DailySlot[] {
     if (isOverrideSlot(slot)) return [];
 
     return slots.filter((candidate) => {
-        return isOverrideSlot(candidate)
-            && candidate.room_id === slot.room_id
-            && slotsOverlap(slot, candidate);
+        return isOverrideSlot(candidate) && candidate.room_id === slot.room_id && slotsOverlap(slot, candidate);
     });
 }
 
@@ -192,18 +198,18 @@ function overrideHasAffectedClass(slot: DailySlot, slots: DailySlot[]): boolean 
     if (!isOverrideSlot(slot)) return false;
 
     return slots.some((candidate) => {
-        return isClassSlot(candidate)
-            && candidate.room_id === slot.room_id
-            && !['cancelled', 'auto_cancelled'].includes(candidate.status)
-            && slotsOverlap(slot, candidate);
+        return (
+            isClassSlot(candidate) &&
+            candidate.room_id === slot.room_id &&
+            !['cancelled', 'auto_cancelled'].includes(candidate.status) &&
+            slotsOverlap(slot, candidate)
+        );
     });
 }
 
 function slotBlockClass(slot: DailySlot, slots: DailySlot[]): string {
     if (isOverrideSlot(slot)) {
-        const overlapState = overrideHasAffectedClass(slot, slots)
-            ? 'z-20 border-dashed opacity-80 shadow-none'
-            : 'z-30';
+        const overlapState = overrideHasAffectedClass(slot, slots) ? 'z-20 border-dashed opacity-80 shadow-none' : 'z-30';
 
         const overrideClass: Record<string, string> = {
             maintenance: 'border-status-maintenance bg-status-maintenance-bg text-pup-gray-800',
@@ -218,9 +224,7 @@ function slotBlockClass(slot: DailySlot, slots: DailySlot[]): string {
         return 'z-30 border-2 border-dashed border-gray-300 bg-gray-50 text-gray-500 opacity-80 shadow-none';
     }
 
-    const exceptionState = isExceptionSlot(slot)
-        ? 'z-30 border-2 border-pup-maroon/70 border-l-4 bg-white text-pup-maroon-deep shadow-sm'
-        : '';
+    const exceptionState = isExceptionSlot(slot) ? 'z-30 border-2 border-pup-maroon/70 border-l-4 bg-white text-pup-maroon-deep shadow-sm' : '';
 
     if (isExceptionSlot(slot)) {
         return exceptionState;
@@ -253,12 +257,12 @@ function slotBlockStyle(slot: DailySlot, slots: DailySlot[]): Record<string, str
     return {};
 }
 
-
-
 const props = defineProps<{
     groups: TimeGroup[];
     rooms: Room[];
     allSlots: DailySlot[];
+    selectedDate: string;
+    currentDateTime: Date | string;
 }>();
 
 const emit = defineEmits<{
@@ -267,6 +271,28 @@ const emit = defineEmits<{
 
 const roomMap = computed(() => new Map(props.rooms.map((room) => [room.id, room])));
 const roomCode = (roomId: number) => roomMap.value.get(roomId)?.code ?? `Room ${roomId}`;
+
+const activeNow = computed(() => {
+    const now = props.currentDateTime instanceof Date ? props.currentDateTime : new Date(props.currentDateTime);
+
+    if (Number.isNaN(now.getTime()) || props.selectedDate !== todayIso(now)) {
+        return null;
+    }
+
+    return now.getHours() * 60 + now.getMinutes();
+});
+
+const currentTimeLabel = computed(() => (activeNow.value === null ? '' : formatMinutes(activeNow.value)));
+
+function isSlotCurrent(slot: DailySlot): boolean {
+    if (activeNow.value === null) return false;
+
+    return parseMinutes(slot.start_time) <= activeNow.value && activeNow.value < parseMinutes(slot.end_time);
+}
+
+function isGroupCurrent(group: TimeGroup): boolean {
+    return group.slots.some(isSlotCurrent);
+}
 </script>
 
 <template>
@@ -274,6 +300,14 @@ const roomCode = (roomId: number) => roomMap.value.get(roomId)?.code ?? `Room ${
         <div class="flex items-center gap-2 border-b border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-700">
             <ListFilter class="h-4 w-4 text-pup-maroon" />
             Detailed daily list
+        </div>
+
+        <div
+            v-if="activeNow !== null"
+            class="flex items-center justify-between gap-3 border-b border-pup-gold/30 bg-pup-gold-pale/40 px-4 py-2 text-xs font-semibold text-pup-maroon-deep"
+        >
+            <span>Current time: {{ currentTimeLabel }}</span>
+            <span class="text-pup-maroon/70">Rows overlapping the current time are highlighted.</span>
         </div>
 
         <div class="overflow-x-auto">
@@ -294,29 +328,44 @@ const roomCode = (roomId: number) => roomMap.value.get(roomId)?.code ?? `Room ${
                         <tr
                             v-for="(slot, index) in group.slots"
                             :key="slot.id"
-                            class="hover:bg-pup-maroon-pale/30"
+                            class="transition"
+                            :class="isSlotCurrent(slot) ? 'bg-pup-gold-pale/60 ring-1 ring-inset ring-pup-gold/40' : 'hover:bg-pup-maroon-pale/30'"
                         >
                             <td
                                 v-if="index === 0"
                                 :rowspan="group.slots.length"
-                                class="whitespace-nowrap border-r border-gray-100 bg-gray-50/70 px-4 py-3 align-top font-semibold text-gray-700"
+                                class="whitespace-nowrap border-r border-gray-100 px-4 py-3 align-top font-semibold text-gray-700"
+                                :class="isGroupCurrent(group) ? 'bg-pup-gold-pale text-pup-maroon-deep' : 'bg-gray-50/70'"
                             >
-                                {{ group.label }}
+                                <div class="flex items-center gap-2">
+                                    <span>{{ group.label }}</span>
+                                    <span
+                                        v-if="isGroupCurrent(group)"
+                                        class="rounded-full bg-pup-maroon px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
+                                    >
+                                        Now
+                                    </span>
+                                </div>
                             </td>
                             <td class="px-4 py-3">
-                                <div class="font-semibold text-gray-800">{{ roomCode(slot.room_id) }}</div>
-                                <div v-if="slot.original_room_code" class="text-xs text-orange-600">
-                                    moved from {{ slot.original_room_code }}
+                                <div class="font-semibold text-gray-800">
+                                    {{ roomCode(slot.room_id) }}
                                 </div>
+                                <div v-if="slot.original_room_code" class="text-xs text-orange-600">moved from {{ slot.original_room_code }}</div>
                             </td>
                             <td class="px-4 py-3">
                                 <div class="font-semibold text-gray-900">{{ slot.subject_code }} · {{ slot.subject_title }}</div>
                                 <div class="text-xs text-gray-500">{{ slot.section }}</div>
-                                <div v-if="blockingOverrideDetails(slot, allSlots)" class="mt-1 inline-flex rounded-full bg-pup-maroon-pale px-2 py-0.5 text-[11px] font-bold text-pup-maroon">
+                                <div
+                                    v-if="blockingOverrideDetails(slot, allSlots)"
+                                    class="mt-1 inline-flex rounded-full bg-pup-maroon-pale px-2 py-0.5 text-[11px] font-bold text-pup-maroon"
+                                >
                                     Room status: {{ blockingOverrideDetails(slot, allSlots) }}
                                 </div>
                             </td>
-                            <td class="px-4 py-3 text-gray-600">{{ slot.instructor_name || '—' }}</td>
+                            <td class="px-4 py-3 text-gray-600">
+                                {{ slot.instructor_name || '—' }}
+                            </td>
                             <td class="px-4 py-3">
                                 <span class="rounded-full px-2.5 py-1 text-xs font-semibold" :class="EVENT_BADGE[slot.event_type]">
                                     {{ EVENT_TYPE_LABEL[slot.event_type] }}
@@ -324,11 +373,7 @@ const roomCode = (roomId: number) => roomMap.value.get(roomId)?.code ?? `Room ${
                             </td>
                             <td class="px-4 py-3">
                                 <div class="inline-flex items-center gap-2 text-xs font-semibold text-gray-700">
-                                    <span
-                                        v-if="slot.source !== 'override'"
-                                        class="h-2.5 w-2.5 rounded-full border"
-                                        :class="statusDotClass(slot)"
-                                    />
+                                    <span v-if="slot.source !== 'override'" class="h-2.5 w-2.5 rounded-full border" :class="statusDotClass(slot)" />
                                     <span class="rounded-full px-2.5 py-1" :class="STATUS_BADGE[slot.status]">
                                         {{ STATUS_LABEL[slot.status] }}
                                     </span>
@@ -348,9 +393,7 @@ const roomCode = (roomId: number) => roomMap.value.get(roomId)?.code ?? `Room ${
                     </template>
 
                     <tr v-if="groups.length === 0">
-                        <td colspan="7" class="px-4 py-10 text-center text-sm text-gray-500">
-                            No schedule items match the selected filters.
-                        </td>
+                        <td colspan="7" class="px-4 py-10 text-center text-sm text-gray-500">No schedule items match the selected filters.</td>
                     </tr>
                 </tbody>
             </table>

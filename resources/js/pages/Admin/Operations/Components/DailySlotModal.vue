@@ -259,6 +259,7 @@ const props = defineProps<{
     slot: DailySlot | null;
     rooms: Room[];
     allSlots: DailySlot[];
+    errors?: Record<string, string>;
 }>();
 
 const emit = defineEmits<{
@@ -269,6 +270,15 @@ const emit = defineEmits<{
 const activeAction = ref<SlotAction | null>(null);
 const actionReason = ref('');
 const changeRoomId = ref<number | null>(null);
+
+const actionError = computed(() => {
+    return props.errors?.room_id
+        ?? props.errors?.start_time
+        ?? props.errors?.end_time
+        ?? props.errors?.schedule_id
+        ?? props.errors?.exception_id
+        ?? '';
+});
 
 const roomMap = computed(() => new Map(props.rooms.map((room) => [room.id, room])));
 const roomLabel = (roomId: number) => {
@@ -301,7 +311,8 @@ function applyAction() {
         room_id: changeRoomId.value,
     });
 
-    activeAction.value = null;
+    // Keep the action panel open until the parent request succeeds.
+    // If validation fails, the error panel stays visible inside this modal.
 }
 </script>
 
@@ -426,9 +437,14 @@ function applyAction() {
                         This action will update the Daily Operations records and refresh the board.
                     </p>
 
+                    <div v-if="actionError" class="mt-4 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-700">
+                        <p class="font-semibold">Action cannot be completed.</p>
+                        <p class="mt-1 leading-relaxed">{{ actionError }}</p>
+                    </div>
+
                     <label v-if="activeAction === 'change-room'" class="mt-4 flex flex-col gap-1 text-sm font-medium text-gray-600">
                         New room
-                        <select v-model="changeRoomId" class="rounded-lg border-gray-200 text-sm focus:border-pup-maroon focus:ring-pup-maroon">
+                        <select v-model="changeRoomId" class="h-11 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-800 shadow-sm outline-none transition focus:border-pup-maroon focus:ring-2 focus:ring-pup-maroon/15">
                             <option v-for="room in rooms" :key="room.id" :value="room.id">
                                 {{ room.code }} · {{ room.name }}
                             </option>
@@ -440,7 +456,7 @@ function applyAction() {
                         <textarea
                             v-model="actionReason"
                             rows="3"
-                            class="rounded-lg border-gray-200 text-sm focus:border-pup-maroon focus:ring-pup-maroon"
+                            class="min-h-[90px] resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-800 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-pup-maroon focus:ring-2 focus:ring-pup-maroon/15"
                             placeholder="Optional note for this daily operation"
                         />
                     </label>

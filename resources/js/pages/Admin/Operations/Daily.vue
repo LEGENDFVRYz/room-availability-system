@@ -3,7 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import PillTabs from '@/components/PillTabs.vue';
 import type { BreadcrumbItem, PageHeader } from '@/types';
 import { Head, router, usePage } from '@inertiajs/vue3';
-import { AlertCircle, CalendarDays, Clock3, Plus, RefreshCw, School } from 'lucide-vue-next';
+import { AlertCircle, CalendarDays, Clock3, ClipboardPlus, RefreshCw, School } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import DailyFilters from './Components/DailyFilters.vue';
 import DailyRequestClassModal from './Components/DailyRequestClassModal.vue';
@@ -23,8 +23,6 @@ import type {
     YearLevel,
 } from './Components/type';
 
-
-// --- Helpers ---
 const START_HOUR = 7;
 const END_HOUR = 21;
 const HOUR_HEIGHT = 76;
@@ -80,7 +78,6 @@ const STATUS_BADGE: Record<DailySlotStatus, string> = {
     reserved: 'bg-status-reserved-bg text-status-reserved',
 };
 
-
 const YEAR_LEVEL_CLASS: Record<YearLevel, string> = {
     '1': 'border-sky-300 bg-sky-50 text-sky-950',
     '2': 'border-emerald-300 bg-emerald-50 text-emerald-950',
@@ -89,8 +86,12 @@ const YEAR_LEVEL_CLASS: Record<YearLevel, string> = {
     unknown: 'border-gray-200 bg-gray-50 text-gray-800',
 };
 
-function todayIso(): string {
-    return new Date().toISOString().slice(0, 10);
+function todayIso(date = new Date()): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
 }
 
 function parseMinutes(time: string): number {
@@ -147,8 +148,7 @@ function isClassSlot(slot: DailySlot): boolean {
 }
 
 function isExceptionSlot(slot: DailySlot): boolean {
-    return slot.source === 'exception'
-        || ['cancellation', 'room_change', 'special_class', 'makeup_class'].includes(slot.event_type);
+    return slot.source === 'exception' || ['cancellation', 'room_change', 'special_class', 'makeup_class'].includes(slot.event_type);
 }
 
 function isCancelledSlot(slot: DailySlot): boolean {
@@ -170,17 +170,14 @@ function statusDotClass(slot: DailySlot): string {
 }
 
 function slotsOverlap(first: DailySlot, second: DailySlot): boolean {
-    return parseMinutes(first.start_time) < parseMinutes(second.end_time)
-        && parseMinutes(first.end_time) > parseMinutes(second.start_time);
+    return parseMinutes(first.start_time) < parseMinutes(second.end_time) && parseMinutes(first.end_time) > parseMinutes(second.start_time);
 }
 
 function overlappingOverrides(slot: DailySlot, slots: DailySlot[]): DailySlot[] {
     if (isOverrideSlot(slot)) return [];
 
     return slots.filter((candidate) => {
-        return isOverrideSlot(candidate)
-            && candidate.room_id === slot.room_id
-            && slotsOverlap(slot, candidate);
+        return isOverrideSlot(candidate) && candidate.room_id === slot.room_id && slotsOverlap(slot, candidate);
     });
 }
 
@@ -214,18 +211,18 @@ function overrideHasAffectedClass(slot: DailySlot, slots: DailySlot[]): boolean 
     if (!isOverrideSlot(slot)) return false;
 
     return slots.some((candidate) => {
-        return isClassSlot(candidate)
-            && candidate.room_id === slot.room_id
-            && !['cancelled', 'auto_cancelled'].includes(candidate.status)
-            && slotsOverlap(slot, candidate);
+        return (
+            isClassSlot(candidate) &&
+            candidate.room_id === slot.room_id &&
+            !['cancelled', 'auto_cancelled'].includes(candidate.status) &&
+            slotsOverlap(slot, candidate)
+        );
     });
 }
 
 function slotBlockClass(slot: DailySlot, slots: DailySlot[]): string {
     if (isOverrideSlot(slot)) {
-        const overlapState = overrideHasAffectedClass(slot, slots)
-            ? 'z-20 border-dashed opacity-80 shadow-none'
-            : 'z-30';
+        const overlapState = overrideHasAffectedClass(slot, slots) ? 'z-20 border-dashed opacity-80 shadow-none' : 'z-30';
 
         const overrideClass: Record<string, string> = {
             maintenance: 'border-status-maintenance bg-status-maintenance-bg text-pup-gray-800',
@@ -240,9 +237,7 @@ function slotBlockClass(slot: DailySlot, slots: DailySlot[]): string {
         return 'z-30 border-2 border-dashed border-gray-300 bg-gray-50 text-gray-500 opacity-80 shadow-none';
     }
 
-    const exceptionState = isExceptionSlot(slot)
-        ? 'z-30 border-2 border-pup-maroon/70 border-l-4 bg-white text-pup-maroon-deep shadow-sm'
-        : '';
+    const exceptionState = isExceptionSlot(slot) ? 'z-30 border-2 border-pup-maroon/70 border-l-4 bg-white text-pup-maroon-deep shadow-sm' : '';
 
     if (isExceptionSlot(slot)) {
         return exceptionState;
@@ -275,8 +270,6 @@ function slotBlockStyle(slot: DailySlot, slots: DailySlot[]): Record<string, str
     return {};
 }
 
-
-// ---- Page Props and Templates ----
 interface Props {
     currentTerm?: CurrentTerm | null;
     rooms?: Room[];
@@ -305,7 +298,11 @@ const pageheader: PageHeader = {
 };
 
 const manageTabs = [
-    { label: 'Daily Schedule', href: '/admin/operations/daily', icon: CalendarDays },
+    {
+        label: 'Daily Schedule',
+        href: '/admin/operations/daily',
+        icon: CalendarDays,
+    },
     { label: 'Room Status', href: '/admin/operations/room-status', icon: School },
 ];
 
@@ -353,9 +350,7 @@ const currentTimeLabel = computed(() => {
 });
 
 const lastUpdatedLabel = computed(() => {
-    const diffInSeconds = Math.floor(
-        (currentDateTime.value.getTime() - lastUpdatedAt.value.getTime()) / 1000,
-    );
+    const diffInSeconds = Math.floor((currentDateTime.value.getTime() - lastUpdatedAt.value.getTime()) / 1000);
 
     if (diffInSeconds < 10) return 'Just now';
     if (diffInSeconds < 60) return `${diffInSeconds} sec ago`;
@@ -422,7 +417,9 @@ function isClassSlotAwaitingClaim(slot: DailySlot): boolean {
 }
 
 const reservedNowCount = computed(() => filteredSlots.value.filter((slot) => isSlotHappeningNow(slot) && isClassSlotAwaitingClaim(slot)).length);
-const occupiedNowCount = computed(() => filteredSlots.value.filter((slot) => isSlotHappeningNow(slot) && isClassSlot(slot) && slot.status === 'ongoing').length);
+const occupiedNowCount = computed(
+    () => filteredSlots.value.filter((slot) => isSlotHappeningNow(slot) && isClassSlot(slot) && slot.status === 'ongoing').length,
+);
 const freeRoomsNowCount = computed(() => {
     const visibleRooms = roomsForGrid.value;
     const busyRoomIds = new Set(filteredSlots.value.filter(isSlotHappeningNow).map((slot) => slot.room_id));
@@ -466,17 +463,23 @@ const tableTimeGroups = computed(() => {
 
 const selectedSlot = ref<DailySlot | null>(null);
 const showClassModal = ref(false);
+const requestClassErrors = ref<Record<string, string>>({});
+const slotActionErrors = ref<Record<string, string>>({});
 
 function openClassModal() {
+    requestClassErrors.value = {};
     showClassModal.value = true;
 }
 
 function closeClassModal() {
     showClassModal.value = false;
+    requestClassErrors.value = {};
 }
 
 function saveClassRequest(payload: ClassRequestPayload) {
     if (!payload.room_id || !payload.subject_code || !payload.subject_title || !payload.section) return;
+
+    requestClassErrors.value = {};
 
     router.post(
         '/admin/operations/daily/request-class',
@@ -490,16 +493,22 @@ function saveClassRequest(payload: ClassRequestPayload) {
                 closeClassModal();
                 lastUpdatedAt.value = new Date();
             },
+            onError: (errors) => {
+                requestClassErrors.value = errors as Record<string, string>;
+                showClassModal.value = true;
+            },
         },
     );
 }
 
 function openSlot(slot: DailySlot) {
+    slotActionErrors.value = {};
     selectedSlot.value = { ...slot };
 }
 
 function closeSlot() {
     selectedSlot.value = null;
+    slotActionErrors.value = {};
 }
 
 function applySlotAction(payload: SlotActionPayload) {
@@ -509,28 +518,41 @@ function applySlotAction(payload: SlotActionPayload) {
         exception_id: payload.slot.exception_id ?? null,
     };
 
+    slotActionErrors.value = {};
+
     const options = {
         preserveScroll: true,
         onSuccess: () => {
             closeSlot();
             lastUpdatedAt.value = new Date();
         },
+        onError: (errors: Record<string, string>) => {
+            slotActionErrors.value = errors;
+        },
     };
 
     if (payload.action === 'cancel') {
-        router.post('/admin/operations/daily/cancel', {
-            ...basePayload,
-            reason: payload.reason,
-        }, options);
+        router.post(
+            '/admin/operations/daily/cancel',
+            {
+                ...basePayload,
+                reason: payload.reason,
+            },
+            options,
+        );
         return;
     }
 
     if (payload.action === 'change-room') {
-        router.post('/admin/operations/daily/change-room', {
-            ...basePayload,
-            room_id: payload.room_id,
-            reason: payload.reason,
-        }, options);
+        router.post(
+            '/admin/operations/daily/change-room',
+            {
+                ...basePayload,
+                room_id: payload.room_id,
+                reason: payload.reason,
+            },
+            options,
+        );
         return;
     }
 
@@ -570,7 +592,7 @@ onUnmounted(() => {
                     @click="openClassModal"
                     class="inline-flex items-center gap-1.5 rounded-lg border border-pup-maroon/15 bg-white px-3.5 py-2 text-sm font-medium text-pup-maroon shadow-sm transition hover:bg-pup-maroon-pale"
                 >
-                    <Plus class="h-4 w-4" />
+                    <ClipboardPlus class="h-4 w-4" />
                     Request Class
                 </button>
             </div>
@@ -600,11 +622,10 @@ onUnmounted(() => {
                         <div>
                             <p class="text-xs font-semibold uppercase tracking-[0.2em] text-pup-gold-light">Daily operations board</p>
                             <p class="mt-1 text-lg font-semibold leading-tight">
-                                Operations: <span class="text-pup-gold-light">{{ selectedDateLabel }}</span>
+                                Operations:
+                                <span class="text-pup-gold-light">{{ selectedDateLabel }}</span>
                             </p>
-                            <p class="mt-1 text-sm text-white/70">
-                                Room View shows the day by room and time. Table View is for detailed checking.
-                            </p>
+                            <p class="mt-1 text-sm text-white/70">Room View shows the day by room and time. Table View is for detailed checking.</p>
                         </div>
                     </div>
 
@@ -636,22 +657,31 @@ onUnmounted(() => {
             <div class="grid gap-3 md:grid-cols-4">
                 <div class="rounded-xl border border-green-100 bg-green-50/70 p-4 shadow-sm">
                     <p class="text-xs font-semibold uppercase tracking-wide text-green-600">Available Now</p>
-                    <p class="mt-2 text-2xl font-bold text-green-800">{{ summaryStats.freeRoomsNowCount }}</p>
+                    <p class="mt-2 text-2xl font-bold text-green-800">
+                        {{ summaryStats.freeRoomsNowCount }}
+                    </p>
                     <p class="text-xs text-green-600">selected rooms without active class</p>
                 </div>
                 <div class="rounded-xl border border-pup-gold/30 bg-pup-gold-pale/50 p-4 shadow-sm">
                     <p class="text-xs font-semibold uppercase tracking-wide text-pup-maroon">Reserved Now</p>
-                    <p class="mt-2 text-2xl font-bold text-pup-maroon-deep">{{ summaryStats.reservedNowCount }}</p>
+                    <p class="mt-2 text-2xl font-bold text-pup-maroon-deep">
+                        {{ summaryStats.reservedNowCount }}
+                    </p>
                     <p class="text-xs text-pup-maroon/70">classes awaiting claim</p>
                 </div>
                 <div class="rounded-xl border border-red-100 bg-red-50/70 p-4 shadow-sm">
                     <p class="text-xs font-semibold uppercase tracking-wide text-red-500">Occupied Now</p>
-                    <p class="mt-2 text-2xl font-bold text-red-800">{{ summaryStats.occupiedNowCount }}</p>
+                    <p class="mt-2 text-2xl font-bold text-red-800">
+                        {{ summaryStats.occupiedNowCount }}
+                    </p>
                     <p class="text-xs text-red-600">marked as started</p>
                 </div>
                 <div class="rounded-xl border border-orange-100 bg-orange-50/70 p-4 shadow-sm">
                     <p class="text-xs font-semibold uppercase tracking-wide text-orange-600">Risk / Exceptions</p>
-                    <p class="mt-2 text-2xl font-bold text-orange-800">{{ summaryStats.upcomingSoonCount }} / {{ summaryStats.exceptionCount }}</p>
+                    <p class="mt-2 text-2xl font-bold text-orange-800">
+                        {{ summaryStats.upcomingSoonCount }} /
+                        {{ summaryStats.exceptionCount }}
+                    </p>
                     <p class="text-xs text-orange-600">starting soon / daily changes</p>
                 </div>
             </div>
@@ -669,6 +699,8 @@ onUnmounted(() => {
                 v-if="viewMode === 'room'"
                 :rooms="roomsForGrid"
                 :all-slots="filteredSlots"
+                :selected-date="selectedDate"
+                :current-date-time="currentDateTime"
                 @open-slot="openSlot"
             />
 
@@ -677,6 +709,8 @@ onUnmounted(() => {
                 :groups="tableTimeGroups"
                 :rooms="rooms"
                 :all-slots="filteredSlots"
+                :selected-date="selectedDate"
+                :current-date-time="currentDateTime"
                 @open-slot="openSlot"
             />
         </div>
@@ -686,6 +720,7 @@ onUnmounted(() => {
         :slot="selectedSlot"
         :rooms="rooms"
         :all-slots="filteredSlots"
+        :errors="slotActionErrors"
         @close="closeSlot"
         @apply-action="applySlotAction"
     />
@@ -694,6 +729,7 @@ onUnmounted(() => {
         :show="showClassModal"
         :rooms="rooms"
         :selected-date-label="selectedDateLabel"
+        :errors="requestClassErrors"
         @close="closeClassModal"
         @save="saveClassRequest"
     />

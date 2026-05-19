@@ -7,6 +7,7 @@ const props = defineProps<{
     show: boolean;
     rooms: Room[];
     selectedDateLabel: string;
+    errors?: Record<string, string>;
 }>();
 
 const emit = defineEmits<{
@@ -18,6 +19,10 @@ const labelClass = 'flex flex-col gap-1.5 text-sm font-semibold text-gray-600';
 const inputClass = 'h-11 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-800 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-pup-maroon focus:ring-2 focus:ring-pup-maroon/15';
 const selectClass = 'h-11 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-800 shadow-sm outline-none transition focus:border-pup-maroon focus:ring-2 focus:ring-pup-maroon/15';
 const textareaClass = 'min-h-[92px] resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-800 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-pup-maroon focus:ring-2 focus:ring-pup-maroon/15';
+
+function fieldError(field: string): string {
+    return props.errors?.[field] ?? '';
+}
 
 const classForm = reactive<ClassRequestPayload>({
     event_type: 'special_class',
@@ -116,6 +121,14 @@ watch(
                     </div>
                 </div>
 
+                <div
+                    v-if="fieldError('room_id') || fieldError('start_time') || fieldError('end_time') || fieldError('event_date')"
+                    class="sm:col-span-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+                >
+                    <p class="font-semibold">Class request cannot be saved.</p>
+                    <p class="mt-1">{{ fieldError('room_id') || fieldError('start_time') || fieldError('end_time') || fieldError('event_date') }}</p>
+                </div>
+
                 <label :class="labelClass">
                     Room
                     <select v-model="classForm.room_id" :class="selectClass">
@@ -123,31 +136,37 @@ watch(
                             {{ room.code }} · {{ room.name }}
                         </option>
                     </select>
+                    <span v-if="fieldError('room_id')" class="text-xs font-medium text-red-600">{{ fieldError('room_id') }}</span>
                 </label>
 
                 <label :class="labelClass">
                     Section
                     <input v-model="classForm.section" type="text" :class="inputClass" placeholder="BSCPE 4-2" />
+                    <span v-if="fieldError('section')" class="text-xs font-medium text-red-600">{{ fieldError('section') }}</span>
                 </label>
 
                 <label :class="labelClass">
                     Subject code
                     <input v-model="classForm.subject_code" type="text" :class="inputClass" placeholder="CMPE 499" />
+                    <span v-if="fieldError('subject_code')" class="text-xs font-medium text-red-600">{{ fieldError('subject_code') }}</span>
                 </label>
 
                 <label :class="labelClass">
                     Subject title
                     <input v-model="classForm.subject_title" type="text" :class="inputClass" placeholder="Capstone Consultation" />
+                    <span v-if="fieldError('subject_title')" class="text-xs font-medium text-red-600">{{ fieldError('subject_title') }}</span>
                 </label>
 
                 <label :class="labelClass">
                     Start time
                     <input v-model="classForm.start_time" type="time" :class="inputClass" />
+                    <span v-if="fieldError('start_time')" class="text-xs font-medium text-red-600">{{ fieldError('start_time') }}</span>
                 </label>
 
                 <label :class="labelClass">
                     End time
                     <input v-model="classForm.end_time" type="time" :class="inputClass" />
+                    <span v-if="fieldError('end_time')" class="text-xs font-medium text-red-600">{{ fieldError('end_time') }}</span>
                 </label>
 
                 <label :class="[labelClass, 'sm:col-span-2']">

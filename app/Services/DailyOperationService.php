@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AcademicTerm;
+use App\Models\RoomOverride;
 use App\Models\RoomUsageLog;
 use App\Models\Schedule;
 use App\Models\ScheduleException;
@@ -22,6 +23,14 @@ class DailyOperationService
                 'event_date' => 'No academic term is available for the selected date.',
             ]);
         }
+
+        $this->assertRoomSlotAvailable(
+            eventDate: $eventDate,
+            term: $term,
+            roomId: (int) $data['room_id'],
+            startTime: $data['start_time'],
+            endTime: $data['end_time'],
+        );
 
         return DB::transaction(function () use ($data, $userId, $eventDate, $term) {
             return ScheduleException::create([
@@ -112,7 +121,25 @@ class DailyOperationService
             $newRoomId = (int) $data['room_id'];
 
             if (! empty($data['exception_id'])) {
-                $exception = ScheduleException::findOrFail($data['exception_id']);
+                $exception = ScheduleException::with('schedule')->findOrFail($data['exception_id']);
+                $term = $this->resolveTermForDate($eventDate) ?? $exception->academicTerm;
+
+                if (! $term) {
+                    throw ValidationException::withMessages([
+                        'event_date' => 'No academic term is available for the selected date.',
+                    ]);
+                }
+
+                $this->assertRoomSlotAvailable(
+                    eventDate: $eventDate,
+                    term: $term,
+                    roomId: $newRoomId,
+                    startTime: $this->timeValue($exception->start_time),
+                    endTime: $this->timeValue($exception->end_time),
+                    ignoreScheduleId: $exception->schedule_id,
+                    ignoreExceptionId: $exception->id,
+                );
+
                 $exception->update([
                     'room_id'        => $newRoomId,
                     'reason'         => $reason ?: $exception->reason,
@@ -133,6 +160,21 @@ class DailyOperationService
 
             $schedule = Schedule::findOrFail($data['schedule_id']);
             $term = $this->resolveTermForDate($eventDate) ?? $schedule->academicTerm;
+
+            if (! $term) {
+                throw ValidationException::withMessages([
+                    'event_date' => 'No academic term is available for the selected date.',
+                ]);
+            }
+
+            $this->assertRoomSlotAvailable(
+                eventDate: $eventDate,
+                term: $term,
+                roomId: $newRoomId,
+                startTime: $this->timeValue($schedule->start_time),
+                endTime: $this->timeValue($schedule->end_time),
+                ignoreScheduleId: $schedule->id,
+            );
 
             return ScheduleException::updateOrCreate(
                 [
@@ -309,6 +351,173 @@ class DailyOperationService
         $log->save();
 
         return $log;
+    }
+
+    private function assertRoomSlotAvailable(
+        string $eventDate,
+        AcademicTerm $term,
+        int $roomId,
+        string $startTime,
+        string $endTime,
+        ?int $ignoreScheduleId = null,
+        ?int $ignoreExceptionId = null,
+    ): void {
+        $startTime = $this->timeValue($startTime);
+        $endTime = $this->timeValue($endTime);
+        $dayOfWeek = Carbon::parse($eventDate)->dayOfWeekIso;
+
+        if ($startTime >= $endTime) {
+            throw ValidationException::withMessages([
+                'end_time' => 'End time must be after start time.',
+            ]);
+        }
+
+        $this->assertNoRoomOverrideConflict(
+            eventDate: $eventDate,
+            roomId: $roomId,
+            startTime: $startTime,
+            endTime: $endTime,
+        );
+
+        $replacedScheduleIds = $this->replacedScheduleIdsForDate($eventDate, $term->id);
+
+        $scheduleConflict = Schedule::query()
+            ->active()
+            ->with('room:id,code,name')
+            ->where('academic_term_id', $term->id)
+            ->where('room_id', $roomId)
+            ->where('day_of_week', $dayOfWeek)
+            ->where('start_time', '<', $endTime)
+            ->where('end_time', '>', $startTime)
+            ->when($ignoreScheduleId, fn ($query) => $query->whereKeyNot($ignoreScheduleId))
+            ->when($replacedScheduleIds->isNotEmpty(), fn ($query) => $query->whereNotIn('id', $replacedScheduleIds))
+            ->orderBy('start_time')
+            ->first();
+
+        if ($scheduleConflict) {
+            $this->throwSlotConflict(
+                roomLabel: $this->roomLabel($roomId),
+                conflictType: 'regular class',
+                subjectCode: $scheduleConflict->subject_code ?? 'Class',
+                startTime: $this->timeValue($scheduleConflict->start_time),
+                endTime: $this->timeValue($scheduleConflict->end_time),
+            );
+        }
+
+        $exceptionConflict = ScheduleException::query()
+            ->with('room:id,code,name')
+            ->whereDate('event_date', $eventDate)
+            ->where('academic_term_id', $term->id)
+            ->where('room_id', $roomId)
+            ->where('start_time', '<', $endTime)
+            ->where('end_time', '>', $startTime)
+            ->where(function ($query) {
+                $query->whereNotIn('status', ['cancelled', 'auto_cancelled'])
+                    ->where('event_type', '!=', 'cancellation');
+            })
+            ->when($ignoreExceptionId, fn ($query) => $query->whereKeyNot($ignoreExceptionId))
+            ->orderBy('start_time')
+            ->first();
+
+        if ($exceptionConflict) {
+            $this->throwSlotConflict(
+                roomLabel: $this->roomLabel($roomId),
+                conflictType: str_replace('_', ' ', $this->enumValue($exceptionConflict->event_type)),
+                subjectCode: $exceptionConflict->subject_code ?: ($exceptionConflict->schedule?->subject_code ?? 'Class'),
+                startTime: $this->timeValue($exceptionConflict->start_time),
+                endTime: $this->timeValue($exceptionConflict->end_time),
+            );
+        }
+    }
+
+    private function assertNoRoomOverrideConflict(
+        string $eventDate,
+        int $roomId,
+        string $startTime,
+        string $endTime,
+    ): void {
+        $requestedStart = Carbon::parse("{$eventDate} {$startTime}");
+        $requestedEnd = Carbon::parse("{$eventDate} {$endTime}");
+
+        $overrideConflict = RoomOverride::query()
+            ->with('room:id,code,name')
+            ->where('room_id', $roomId)
+            ->where('is_active', true)
+            ->where('starts_at', '<', $requestedEnd)
+            ->where(function ($query) use ($requestedStart) {
+                $query->whereNull('ends_at')
+                    ->orWhere('ends_at', '>', $requestedStart);
+            })
+            ->orderBy('starts_at')
+            ->first();
+
+        if (! $overrideConflict) {
+            return;
+        }
+
+        $status = $this->enumValue($overrideConflict->status);
+        $label = ucfirst(str_replace('_', ' ', $status));
+        $startsAt = Carbon::parse($overrideConflict->starts_at)->format('g:i A');
+        $endsAt = $overrideConflict->ends_at
+            ? Carbon::parse($overrideConflict->ends_at)->format('g:i A')
+            : 'until cleared';
+        $reason = trim((string) $overrideConflict->reason);
+        $reasonText = $reason !== '' ? " Reason: {$reason}" : '';
+
+        throw ValidationException::withMessages([
+            'room_id' => "{$this->roomLabel($roomId)} has an active {$label} override from {$startsAt} to {$endsAt}.{$reasonText} Clear or end the room override first, or choose another room/time.",
+            'start_time' => 'The selected time overlaps an active room override.',
+            'end_time' => 'The selected time overlaps an active room override.',
+        ]);
+    }
+
+    private function replacedScheduleIdsForDate(string $eventDate, int $termId): \Illuminate\Support\Collection
+    {
+        return ScheduleException::query()
+            ->whereDate('event_date', $eventDate)
+            ->where('academic_term_id', $termId)
+            ->whereNotNull('schedule_id')
+            ->where(function ($query) {
+                $query->where('event_type', 'cancellation')
+                    ->orWhere(function ($query) {
+                        $query->where('event_type', 'room_change')
+                            ->whereNotIn('status', ['cancelled', 'auto_cancelled']);
+                    });
+            })
+            ->pluck('schedule_id')
+            ->filter()
+            ->unique()
+            ->values();
+    }
+
+    private function throwSlotConflict(
+        string $roomLabel,
+        string $conflictType,
+        string $subjectCode,
+        string $startTime,
+        string $endTime,
+    ): never {
+        throw ValidationException::withMessages([
+            'room_id' => "{$roomLabel} already has an overlapping {$conflictType}: {$subjectCode} ({$startTime}–{$endTime}). Cancel the existing class first or choose another room/time.",
+            'start_time' => 'The selected time overlaps an existing class or exception.',
+            'end_time' => 'The selected time overlaps an existing class or exception.',
+        ]);
+    }
+
+    private function roomLabel(int $roomId): string
+    {
+        $room = \App\Models\Room::query()->select('code', 'name')->find($roomId);
+
+        if (! $room) {
+            return "Room #{$roomId}";
+        }
+
+        return trim("{$room->code} {$room->name}");
+    }
+
+    private function enumValue(mixed $value): string
+    {
+        return $value instanceof \BackedEnum ? $value->value : (string) $value;
     }
 
     private function resolveTermForDate(string $date): ?AcademicTerm

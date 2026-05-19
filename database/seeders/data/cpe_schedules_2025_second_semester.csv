@@ -1,4 +1,4 @@
-day,room_code,start_time,end_time,subject_code,subject_title,section,instructor_name
+﻿day,room_code,start_time,end_time,subject_code,subject_title,section,instructor_name
 Monday,CEA300,7:30:00,12:30:00,CMPE 364,Web and Mobile Systems,BSCPE 3-6,Engr. Canlas
 Monday,CEA300,12:30:00,14:30:00,CMPE 361,Enterprise Networking,BSCPE 1-1P,Engr. Binuya
 Monday,CEA300,15:00:00,18:00:00,CMPE 310,Computer Networks,BSCPE 3-4,Engr. Reyes
@@ -20,7 +20,7 @@ Monday,CEA313,10:30:00,13:30:00,CMPE 011,Computer Programming,BSCE 1-2,Engr. Rac
 Monday,CEA313,13:30:00,16:30:00,CMPE 105,Computer Hardware,BSCPE 1-1,Engr. Tancinco
 Monday,CEA313,18:00:00,21:00:00,CMPE 105,Computer Hardware,BSCPE 1-7,Engr. Tancinco
 Monday,CEA312,7:30:00,10:30:00,CMPE 310,Computer Networks,BSCPE 3-7,Engr. Binuya
-Monday,CEA312,10:30:00,13:30:00,ENSC 411,Technopreneurship 101,BSCPE 3-3,Engr. Te�a
+Monday,CEA312,10:30:00,13:30:00,ENSC 411,Technopreneurship 101,BSCPE 3-3,Engr. Teña
 Monday,CEA312,15:00:00,18:00:00,CMPE 311,Microprocessors,BSCPE 3-2,Engr. Bautista
 Monday,CEA312,18:00:00,21:00:00,CMPE 104,Discrete Math,BSCPE 1-3,Engr. Ello
 Monday,CEA311,7:30:00,10:30:00,CMPE 311,Microprocessors,BSCPE 3-3,Engr. Mahaguay
@@ -30,8 +30,8 @@ Monday,CEA311,18:00:00,21:00:00,CMPE 012,Computer Programming,BSEE 1-4,Engr. Bau
 Monday,CEA310,10:30:00,13:30:00,ENSC 029,Technopreneurship 101,BSREM 3-1,Engr. Reyes
 Monday,CEA310,14:30:00,19:30:00,CMPE 014,Microprocessors,BSEE 3-2,Engr. Racusa
 Monday,CEA413,10:30:00,13:30:00,CMPE 307,Basic Occupational Health and Safety,BSCPE 3-5,Engr. Nudalo
-Monday,CEA413,13:30:00,16:30:00,ENSC 029,Technopreneurship 101,BSREM 3-2,Engr. Te�a
-Monday,CEA413,18:00:00,21:00:00,ENSC 411,Technopreneurship 101,BSCPE 3-2,Engr. Te�a
+Monday,CEA413,13:30:00,16:30:00,ENSC 029,Technopreneurship 101,BSREM 3-2,Engr. Teña
+Monday,CEA413,18:00:00,21:00:00,ENSC 411,Technopreneurship 101,BSCPE 3-2,Engr. Teña
 Tuesday,CEA302,7:30:00,10:30:00,GEED 002,Philippine History,BSCPE 2-1,TBA
 Tuesday,CEA302,10:30:00,13:30:00,CMPE 409,Embedded Systems,BSCPE 4-2,Engr. Marasigan
 Tuesday,CEA302,15:00:00,18:00:00,CMPE 204,Advanced Math,BSCPE 2-5,Engr. Bautista
@@ -41,16 +41,16 @@ Tuesday,CEA300,12:00:00,15:00:00,CMPE 309,Feedback and Control Systems,BSCPE 3-3
 Tuesday,CEA300,15:00:00,18:00:00,CMPE 406,Software Design,BSCPE 4-6,Engr. Lorico
 Tuesday,CEA300,18:00:00,21:00:00,CMPE 410,Emerging Technologies,BSCPE 4-1,Engr. Artificio
 Tuesday,CEA316,7:30:00,10:30:00,GEED 003,Contemporary World,BSCPE 2-2,TBA
-Tuesday,CEA316,10:30:00,13:30:00,CMPE 406,Software Design,BSCPE 4-1,Engr. Te�a
+Tuesday,CEA316,10:30:00,13:30:00,CMPE 406,Software Design,BSCPE 4-1,Engr. Teña
 Tuesday,CEA316,13:30:00,16:30:00,ECEN 011,Electronic Circuits,BSCPE 2-7,Engr. Natividad
 Tuesday,CEA316,18:00:00,21:00:00,ECEN 011,Electronic Circuits,BSCPE 2-3,Engr. Natividad
 Tuesday,CEA315,7:30:00,10:30:00,CMPE 103,Object Oriented Programming,BSCPE 1-3,Engr. Avena
 Tuesday,CEA315,10:30:00,13:30:00,CMPE 103,Object Oriented Programming,BSCPE 1-3,Engr. Avena
-Tuesday,CEA315,15:00:00,18:00:00,CMPE 406,Software Design,BSCPE 4-2,Engr. Te�a
+Tuesday,CEA315,15:00:00,18:00:00,CMPE 406,Software Design,BSCPE 4-2,Engr. Teña
 Tuesday,CEA315,18:00:00,21:00:00,CMPE 204,Advanced Math,BSCPE 1-1P,Engr. Bautista
 Tuesday,CEA314,7:30:00,10:30:00,CMPE 103,Object Oriented Programming,BSCPE 1-3,Engr. Avena
 Tuesday,CEA314,10:30:00,13:30:00,CMPE 103,Object Oriented Programming,BSCPE 1-3,Engr. Avena
-Tuesday,CEA314,15:00:00,18:00:00,CMPE 406,Software Design,BSCPE 4-2,Engr. Te�a
+Tuesday,CEA314,15:00:00,18:00:00,CMPE 406,Software Design,BSCPE 4-2,Engr. Teña
 Tuesday,CEA314,18:00:00,21:00:00,CMPE 204,Advanced Math,BSCPE 1-1P,Engr. Bautista
 Tuesday,CEA313,7:30:00,10:30:00,CMPE 310,Computer Networks,BSCPE 3-5,Engr. Pajabera
 Tuesday,CEA313,11:00:00,13:00:00,CMPE 361,Enterprise Networking,BSCPE 3-4,Engr. Pajabera
@@ -88,7 +88,7 @@ Wednesday,CEA315,15:00:00,18:00:00,CMPE 311,Microprocessors,BSCPE 3-1,Engr. Mara
 Wednesday,CEA315,18:00:00,21:00:00,CMPE 409,Embedded Systems,BSCPE 4-6,Engr. Malbog
 Wednesday,CEA314,7:30:00,10:30:00,CMPE 203,Numerical Methods,BSCPE 2-3,Engr. Lacatan
 Wednesday,CEA314,10:30:00,13:30:00,CMPE 409,Embedded Systems,BSCPE 4-5,Engr. Racusa
-Wednesday,CEA314,14:00:00,16:00:00,CMPE 308,CPE Laws,BSCPE 3-5,Engr. Te�a
+Wednesday,CEA314,14:00:00,16:00:00,CMPE 308,CPE Laws,BSCPE 3-5,Engr. Teña
 Wednesday,CEA314,16:00:00,21:00:00,CMPE 40213,Software Process and Product Quality,BSCOE 4-1P,Engr. Lorico
 Wednesday,CEA313,7:30:00,10:30:00,CMPE 202,Operating Systems,BSCPE 2-2,Engr. Tenerife
 Wednesday,CEA313,10:30:00,13:30:00,CMPE 202,Operating Systems,BSCPE 2-3,Engr. Tenerife
@@ -144,7 +144,7 @@ Thursday,CEA311,18:00:00,21:00:00,CMPE 012,Computer Programming,BSEE 1-4,Engr. B
 Thursday,CEA310,10:30:00,13:30:00,ENSC 121,Computer Aided Drafting,BSCPE 2-4,TBA
 Thursday,CEA310,14:30:00,19:30:00,CMPE 014,Microprocessors,BSEE 3-1,Engr. Racusa
 Thursday,CEA413,10:30:00,13:30:00,ENSC 121,Computer Aided Drafting,BSCPE 2-4,TBA
-Thursday,CEA413,14:30:00,16:30:00,CMPE 308,CPE Laws,BSCPE 3-7,Engr. Te�a
+Thursday,CEA413,14:30:00,16:30:00,CMPE 308,CPE Laws,BSCPE 3-7,Engr. Teña
 Thursday,CEA413,18:00:00,21:00:00,CMPE 311,Microprocessors,BSCPE 3-6,Engr. Marasigan
 Friday,CEA300,7:30:00,10:30:00,CMPE 310,Computer Networks,BSCPE 3-1,Engr. Binuya
 Friday,CEA300,10:30:00,13:30:00,ENSC 411,Technopreneurship 101,BSCPE 3-1,Engr. Reyes
@@ -158,7 +158,7 @@ Friday,CEA315,10:30:00,13:30:00,CMPE 409,Embedded Systems,BSCPE 4-5,Engr. Racusa
 Friday,CEA315,14:30:00,16:30:00,CMPE 461,Cloud Computing,BSCPE 4-4,Engr. Pajabera
 Friday,CEA315,18:00:00,21:00:00,CMPE 461,Cloud Computing,BSCPE 4-4,Engr. Pajabera
 Friday,CEA314,7:30:00,10:30:00,CMPE 104,Discrete Math,BSCPE 1-5,Engr. Lacatan
-Friday,CEA314,10:30:00,13:30:00,CMPE 406,Software Design,BSCPE 4-1,Engr. Te�a
+Friday,CEA314,10:30:00,13:30:00,CMPE 406,Software Design,BSCPE 4-1,Engr. Teña
 Friday,CEA314,15:00:00,18:00:00,CMPE 406,Software Design,BSCPE 4-6,Engr. Lorico
 Friday,CEA314,18:00:00,21:00:00,CMPE 309,Feedback and Control Systems,BSCPE 3-6,Engr. Dela Cruz
 Friday,CEA313,7:30:00,10:30:00,CMPE 011,Computer Programming,BSCE 1-6,Engr. Rodriguez
@@ -166,7 +166,7 @@ Friday,CEA313,10:30:00,13:30:00,CMPE 409,Embedded Systems,BSCPE 4-2,Engr. Marasi
 Friday,CEA313,15:00:00,18:00:00,CMPE 310,Computer Networks,BSCPE 3-2,Engr. Reyes
 Friday,CEA313,18:00:00,21:00:00,CMPE 310,Computer Networks,BSCPE 3-2,Engr. Reyes
 Friday,CEA312,11:00:00,14:00:00,CMPE 406,Software Design,BSCPE 4-3,Engr. Lorico
-Friday,CEA312,15:00:00,18:00:00,CMPE 406,Software Design,BSCPE 4-5,Engr. Te�a
+Friday,CEA312,15:00:00,18:00:00,CMPE 406,Software Design,BSCPE 4-5,Engr. Teña
 Friday,CEA312,18:00:00,21:00:00,CMPE 104,Discrete Math,BSCPE 1-4,Engr. Ello
 Friday,CEA311,7:30:00,10:30:00,CMPE 202,Operating Systems,BSCPE 2-1,Engr. Tenerife
 Friday,CEA311,10:30:00,13:30:00,CMPE 011,Computer Programming,BSCE 1-5,Engr. Bautista

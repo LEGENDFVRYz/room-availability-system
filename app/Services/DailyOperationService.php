@@ -381,7 +381,7 @@ class DailyOperationService
 
         $replacedScheduleIds = $this->replacedScheduleIdsForDate($eventDate, $term->id);
 
-        $scheduleConflict = Schedule::query()
+        $scheduleConflicts = Schedule::query()
             ->active()
             ->with('room:id,code,name')
             ->where('academic_term_id', $term->id)
@@ -392,20 +392,26 @@ class DailyOperationService
             ->when($ignoreScheduleId, fn ($query) => $query->whereKeyNot($ignoreScheduleId))
             ->when($replacedScheduleIds->isNotEmpty(), fn ($query) => $query->whereNotIn('id', $replacedScheduleIds))
             ->orderBy('start_time')
-            ->first();
+            ->get();
 
-        if ($scheduleConflict) {
+        foreach ($scheduleConflicts as $scheduleConflict) {
+            [$effectiveStart, $effectiveEnd, $wasTrimmed] = $this->effectiveScheduleWindow($scheduleConflict, $eventDate);
+
+            if (! $this->timeWindowsOverlap($startTime, $endTime, $effectiveStart, $effectiveEnd)) {
+                continue;
+            }
+
             $this->throwSlotConflict(
                 roomLabel: $this->roomLabel($roomId),
-                conflictType: 'regular class',
+                conflictType: $wasTrimmed ? 'completed regular class' : 'regular class',
                 subjectCode: $scheduleConflict->subject_code ?? 'Class',
-                startTime: $this->timeValue($scheduleConflict->start_time),
-                endTime: $this->timeValue($scheduleConflict->end_time),
+                startTime: $effectiveStart,
+                endTime: $effectiveEnd,
             );
         }
 
-        $exceptionConflict = ScheduleException::query()
-            ->with('room:id,code,name')
+        $exceptionConflicts = ScheduleException::query()
+            ->with(['room:id,code,name', 'schedule:id,subject_code'])
             ->whereDate('event_date', $eventDate)
             ->where('academic_term_id', $term->id)
             ->where('room_id', $roomId)
@@ -417,17 +423,91 @@ class DailyOperationService
             })
             ->when($ignoreExceptionId, fn ($query) => $query->whereKeyNot($ignoreExceptionId))
             ->orderBy('start_time')
-            ->first();
+            ->get();
 
-        if ($exceptionConflict) {
+        foreach ($exceptionConflicts as $exceptionConflict) {
+            [$effectiveStart, $effectiveEnd, $wasTrimmed] = $this->effectiveExceptionWindow($exceptionConflict);
+
+            if (! $this->timeWindowsOverlap($startTime, $endTime, $effectiveStart, $effectiveEnd)) {
+                continue;
+            }
+
             $this->throwSlotConflict(
                 roomLabel: $this->roomLabel($roomId),
-                conflictType: str_replace('_', ' ', $this->enumValue($exceptionConflict->event_type)),
+                conflictType: ($wasTrimmed ? 'completed ' : '') . str_replace('_', ' ', $this->enumValue($exceptionConflict->event_type)),
                 subjectCode: $exceptionConflict->subject_code ?: ($exceptionConflict->schedule?->subject_code ?? 'Class'),
-                startTime: $this->timeValue($exceptionConflict->start_time),
-                endTime: $this->timeValue($exceptionConflict->end_time),
+                startTime: $effectiveStart,
+                endTime: $effectiveEnd,
             );
         }
+    }
+
+    /**
+     * Returns the conflict window that should still block same-day class requests.
+     *
+     * If a scheduled class has already been completed and its actual end is before
+     * the expected end, the remaining room time is free for another valid class
+     * request. The original schedule row is not edited; only the same-day conflict
+     * check is shortened by the usage log.
+     *
+     * @return array{0:string,1:string,2:bool}
+     */
+    private function effectiveScheduleWindow(Schedule $schedule, string $eventDate): array
+    {
+        $startTime = $this->timeValue($schedule->start_time);
+        $endTime = $this->timeValue($schedule->end_time);
+
+        $usageLog = RoomUsageLog::query()
+            ->whereDate('usage_date', $eventDate)
+            ->where('source', 'schedule')
+            ->where('schedule_id', $schedule->id)
+            ->first();
+
+        return $this->trimWindowByCompletedUsageLog($startTime, $endTime, $usageLog);
+    }
+
+    /**
+     * @return array{0:string,1:string,2:bool}
+     */
+    private function effectiveExceptionWindow(ScheduleException $exception): array
+    {
+        $startTime = $this->timeValue($exception->start_time ?: $exception->schedule?->start_time);
+        $endTime = $this->timeValue($exception->end_time ?: $exception->schedule?->end_time);
+
+        $usageLog = RoomUsageLog::query()
+            ->whereDate('usage_date', $exception->event_date)
+            ->where('source', 'schedule_exception')
+            ->where('schedule_exception_id', $exception->id)
+            ->first();
+
+        return $this->trimWindowByCompletedUsageLog($startTime, $endTime, $usageLog);
+    }
+
+    /**
+     * @return array{0:string,1:string,2:bool}
+     */
+    private function trimWindowByCompletedUsageLog(string $startTime, string $endTime, ?RoomUsageLog $usageLog): array
+    {
+        if (! $usageLog || $this->enumValue($usageLog->status) !== 'completed' || ! $usageLog->actual_end) {
+            return [$startTime, $endTime, false];
+        }
+
+        $actualEnd = $this->timeValue($usageLog->actual_end);
+
+        if ($actualEnd <= $startTime) {
+            return [$startTime, $startTime, true];
+        }
+
+        if ($actualEnd < $endTime) {
+            return [$startTime, $actualEnd, true];
+        }
+
+        return [$startTime, $endTime, false];
+    }
+
+    private function timeWindowsOverlap(string $firstStart, string $firstEnd, string $secondStart, string $secondEnd): bool
+    {
+        return $firstStart < $secondEnd && $firstEnd > $secondStart;
     }
 
     private function assertNoRoomOverrideConflict(

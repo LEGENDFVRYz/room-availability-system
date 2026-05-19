@@ -114,8 +114,42 @@ function formatMinutes(minutes: number): string {
     return `${hour % 12 || 12}:${minute.toString().padStart(2, '0')}${hour < 12 ? 'AM' : 'PM'}`;
 }
 
+function normalizeTimeValue(value?: string | null): string | null {
+    if (!value) return null;
+
+    const directTime = value.match(/^(\d{2}:\d{2})/);
+    if (directTime) return directTime[1];
+
+    const embeddedTime = value.match(/[T\s](\d{2}:\d{2})/);
+    if (embeddedTime) return embeddedTime[1];
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+
+    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+}
+
+function effectiveEndTime(slot: DailySlot): string {
+    if (!isClassSlot(slot) || slot.status !== 'completed') return slot.end_time;
+
+    const actualEnd = normalizeTimeValue(slot.actual_end);
+    if (!actualEnd) return slot.end_time;
+
+    return parseMinutes(actualEnd) > parseMinutes(slot.start_time) && parseMinutes(actualEnd) < parseMinutes(slot.end_time)
+        ? actualEnd
+        : slot.end_time;
+}
+
+function isTrimmedByActualEnd(slot: DailySlot): boolean {
+    return effectiveEndTime(slot) !== slot.end_time;
+}
+
 function formatTimeRange(slot: DailySlot): string {
-    return `${formatTime(slot.start_time)}–${formatTime(slot.end_time)}`;
+    return `${formatTime(slot.start_time)}–${formatTime(effectiveEndTime(slot))}`;
+}
+
+function formatOriginalEnd(slot: DailySlot): string {
+    return formatTime(slot.end_time);
 }
 
 function yearLevel(slot: DailySlot): YearLevel {
@@ -140,7 +174,8 @@ function isExceptionSlot(slot: DailySlot): boolean {
 }
 
 function slotsOverlap(first: DailySlot, second: DailySlot): boolean {
-    return parseMinutes(first.start_time) < parseMinutes(second.end_time) && parseMinutes(first.end_time) > parseMinutes(second.start_time);
+    return parseMinutes(first.start_time) < parseMinutes(effectiveEndTime(second))
+        && parseMinutes(effectiveEndTime(first)) > parseMinutes(second.start_time);
 }
 
 function overlappingOverrides(slot: DailySlot, slots: DailySlot[]): DailySlot[] {
@@ -219,9 +254,9 @@ function slotBlockClass(slot: DailySlot, slots: DailySlot[]): string {
             : 'z-50';
 
         const overrideClass: Record<string, string> = {
-            maintenance: 'border-status-maintenance bg-status-maintenance-bg text-pup-gray-800',
-            unavailable: 'border-pup-gray-600 bg-pup-gray-200 text-pup-gray-800',
-            reserved: 'border-status-reserved-border bg-status-reserved-bg text-status-reserved',
+            maintenance: 'border-status-maintenance bg-status-maintenance-bg text-pup-gray-800 opacity-70',
+            unavailable: 'border-pup-gray-600 bg-pup-gray-200 text-pup-gray-800 opacity-70',
+            reserved:    'border-status-reserved-border bg-status-reserved-bg text-status-reserved opacity-70',
         };
 
         return `${overrideClass[slot.event_type] ?? overrideClass.maintenance} ${overlapState}`;
@@ -232,11 +267,11 @@ function slotBlockClass(slot: DailySlot, slots: DailySlot[]): string {
         : 'z-30';
 
     if (isCancelledSlot(slot)) {
-        return `${blockedState} border-2 border-dashed border-gray-300 bg-gray-50 text-gray-500 opacity-80 shadow-none`;
+        return `${blockedState} border-2 border-dashed border-gray-300 bg-gray-50 text-gray-500 opacity-50`;
     }
 
     if (isExceptionSlot(slot)) {
-        return `${blockedState} border-2 border-pup-maroon/70 border-l-4 bg-white text-pup-maroon-deep shadow-sm`;
+        return `${blockedState} border-2 border-pup-maroon/70 bg-white text-pup-maroon-deep shadow-sm`;
     }
 
     return `${YEAR_LEVEL_CLASS[yearLevel(slot)]} ${blockedState}`;
@@ -259,7 +294,7 @@ function slotBlockStyle(slot: DailySlot, slots: DailySlot[]): Record<string, str
     if (isCancelledSlot(slot)) {
         return {
             backgroundImage:
-                'repeating-linear-gradient(135deg, rgba(107, 114, 128, 0.12) 0px, rgba(107, 114, 128, 0.12) 3px, transparent 3px, transparent 9px)',
+                'transparent 3px, transparent 9px)',
         };
     }
 
@@ -324,28 +359,40 @@ const emit = defineEmits<{
                 </div>
 
                 <div class="relative flex" :style="{ minHeight: GRID_HEIGHT + 'px' }">
-                    <div class="sticky left-0 z-[50] w-16 shrink-0 border-r border-gray-200 bg-gray-50/95 shadow-[8px_0_12px_-12px_rgba(0,0,0,0.35)]">
+                    <div class="sticky left-0 z-[80] w-16 shrink-0 border-r border-gray-200 bg-gray-50/95 shadow-[8px_0_12px_-12px_rgba(0,0,0,0.35)]">
                         <div
                             v-for="hour in hours"
                             :key="hour"
-                            class="absolute right-0 flex w-full items-center justify-end pr-2 z-[200]"
+                            class="absolute right-0 flex w-full items-center justify-end pr-2"
                             :style="{ top: (hour - START_HOUR) * HOUR_HEIGHT - 8 + 'px' }"
                         >
                             <span class="text-[10px] font-medium leading-none text-gray-400">
                                 {{ formatHour(hour) }}
                             </span>
                         </div>
-                    </div>
 
-                    <div v-if="showCurrentTimeMarker" class="pointer-events-none absolute inset-x-0 z-[55]" :style="{ top: currentTimeTop + 'px' }">
-                        <div class="relative border-t-2 border-pup-maroon">
+                        <div
+                            v-if="showCurrentTimeMarker"
+                            class="pointer-events-none absolute inset-x-0 z-40"
+                            :style="{ top: currentTimeTop + 'px' }"
+                        >
+                            <!-- <div class="absolute right-0 top-1/2 h-0.5 w-2 -translate-y-1/2 bg-pup-maroon" /> -->
                             <span
-                                class="sticky left-1 inline-flex -translate-y-1/2 items-center rounded-full bg-pup-maroon px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm ring-2 ring-white"
+                                class="absolute right-1 flex w-[54px] -translate-y-1/2 flex-col items-center rounded-full bg-pup-maroon px-1 py-1 text-[10px] font-bold uppercase leading-tight tracking-wide text-white shadow-sm ring-2 ring-white"
                             >
-                                Now · {{ currentTimeLabel }}
+                                <span>{{ currentTimeLabel }}</span>
                             </span>
                         </div>
                     </div>
+
+                    <div
+                        v-if="showCurrentTimeMarker"
+                        class="pointer-events-none absolute right-0 z-50 border-t-2 border-pup-maroon/80"
+                        :style="{
+                            top: currentTimeTop + 'px',
+                            left: TIME_COLUMN_WIDTH + 'px',
+                        }"
+                    />
 
                     <div v-for="room in rooms" :key="room.id" class="group/room relative min-w-[118px] flex-1 border-r border-gray-100 last:border-r-0">
                         <div
@@ -371,40 +418,23 @@ const emit = defineEmits<{
                             :class="slotBlockClass(slot, allSlots)"
                             :style="{
                                 top: slotTop(slot.start_time) + 3 + 'px',
-                                height: slotHeight(slot.start_time, slot.end_time) - 6 + 'px',
+                                height: slotHeight(slot.start_time, effectiveEndTime(slot)) - 6 + 'px',
                                 ...slotBlockStyle(slot, allSlots),
                             }"
                             @click="emit('open-slot', slot)"
                         >
-                            <div class="flex items-start justify-between gap-1">
+                            <div class="flex flex-1 items-center justify-between gap-2 w-full min-w-0">
                                 <div class="min-w-0">
-                                    <div class="flex items-center gap-1.5">
-                                        <span class="h-2 w-2 shrink-0 rounded-full border" :class="statusDotClass(slot)" :title="STATUS_LABEL[slot.status]" />
-                                        <p class="line-clamp-2 text-[11px] font-bold leading-snug">
-                                            {{ slot.subject_code }}
-                                        </p>
-                                    </div>
+                                    <p class="line-clamp-2 text-[11px] font-bold leading-snug text-gray-900">
+                                        {{ slot.subject_code }}
+                                    </p>
                                 </div>
-                                <div class="flex shrink-0 flex-col items-end gap-1">
-                                    <span
-                                        v-if="blockingOverrideLabel(slot, allSlots)"
-                                        class="rounded bg-pup-maroon/90 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white"
-                                    >
-                                        Blocked
-                                    </span>
-                                    <span
-                                        v-if="isExceptionSlot(slot) && !isCancelledSlot(slot)"
-                                        class="rounded border border-pup-maroon/25 bg-pup-maroon-pale px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-pup-maroon"
-                                    >
-                                        Exception
-                                    </span>
-                                    <span
-                                        v-if="isCancelledSlot(slot)"
-                                        class="rounded border border-gray-300 bg-white px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-gray-500"
-                                    >
-                                        Cancelled
-                                    </span>
-                                </div>
+                                
+                                <span 
+                                    class="h-2 w-2 shrink-0 rounded-full border" 
+                                    :class="statusDotClass(slot)" 
+                                    :title="STATUS_LABEL[slot.status]" 
+                                />
                             </div>
 
                             <p class="line-clamp-2 text-[10px] font-semibold leading-snug opacity-80">
@@ -413,6 +443,9 @@ const emit = defineEmits<{
                             <p class="mt-0.5 text-[10px] opacity-65">
                                 {{ formatTimeRange(slot) }}
                             </p>
+                            <!-- <p v-if="isTrimmedByActualEnd(slot)" class="truncate text-[9px] font-semibold text-green-700">
+                                Ended early · was until {{ formatOriginalEnd(slot) }}
+                            </p> -->
                             <p class="truncate text-[10px] opacity-55">{{ slot.section }}</p>
                             <p v-if="blockingOverrideLabel(slot, allSlots)" class="mt-0.5 truncate text-[9px] font-semibold text-pup-maroon">
                                 {{ blockingOverrideLabel(slot, allSlots) }}

@@ -113,8 +113,42 @@ function formatMinutes(minutes: number): string {
     return `${hour % 12 || 12}:${minute.toString().padStart(2, '0')}${hour < 12 ? 'AM' : 'PM'}`;
 }
 
+function normalizeTimeValue(value?: string | null): string | null {
+    if (!value) return null;
+
+    const directTime = value.match(/^(\d{2}:\d{2})/);
+    if (directTime) return directTime[1];
+
+    const embeddedTime = value.match(/[T\s](\d{2}:\d{2})/);
+    if (embeddedTime) return embeddedTime[1];
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+
+    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+}
+
+function effectiveEndTime(slot: DailySlot): string {
+    if (!isClassSlot(slot) || slot.status !== 'completed') return slot.end_time;
+
+    const actualEnd = normalizeTimeValue(slot.actual_end);
+    if (!actualEnd) return slot.end_time;
+
+    return parseMinutes(actualEnd) > parseMinutes(slot.start_time) && parseMinutes(actualEnd) < parseMinutes(slot.end_time)
+        ? actualEnd
+        : slot.end_time;
+}
+
+function isTrimmedByActualEnd(slot: DailySlot): boolean {
+    return effectiveEndTime(slot) !== slot.end_time;
+}
+
 function formatTimeRange(slot: DailySlot): string {
-    return `${formatTime(slot.start_time)}–${formatTime(slot.end_time)}`;
+    return `${formatTime(slot.start_time)}–${formatTime(effectiveEndTime(slot))}`;
+}
+
+function formatOriginalEnd(slot: DailySlot): string {
+    return formatTime(slot.end_time);
 }
 
 function yearLevel(slot: DailySlot): YearLevel {
@@ -157,7 +191,8 @@ function statusDotClass(slot: DailySlot): string {
 }
 
 function slotsOverlap(first: DailySlot, second: DailySlot): boolean {
-    return parseMinutes(first.start_time) < parseMinutes(second.end_time) && parseMinutes(first.end_time) > parseMinutes(second.start_time);
+    return parseMinutes(first.start_time) < parseMinutes(effectiveEndTime(second))
+        && parseMinutes(effectiveEndTime(first)) > parseMinutes(second.start_time);
 }
 
 function overlappingOverrides(slot: DailySlot, slots: DailySlot[]): DailySlot[] {
@@ -287,7 +322,7 @@ const currentTimeLabel = computed(() => (activeNow.value === null ? '' : formatM
 function isSlotCurrent(slot: DailySlot): boolean {
     if (activeNow.value === null) return false;
 
-    return parseMinutes(slot.start_time) <= activeNow.value && activeNow.value < parseMinutes(slot.end_time);
+    return parseMinutes(slot.start_time) <= activeNow.value && activeNow.value < parseMinutes(effectiveEndTime(slot));
 }
 
 function isGroupCurrent(group: TimeGroup): boolean {
@@ -302,13 +337,13 @@ function isGroupCurrent(group: TimeGroup): boolean {
             Detailed daily list
         </div>
 
-        <div
+        <!-- <div
             v-if="activeNow !== null"
             class="flex items-center justify-between gap-3 border-b border-pup-gold/30 bg-pup-gold-pale/40 px-4 py-2 text-xs font-semibold text-pup-maroon-deep"
         >
             <span>Current time: {{ currentTimeLabel }}</span>
             <span class="text-pup-maroon/70">Rows overlapping the current time are highlighted.</span>
-        </div>
+        </div> -->
 
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200 text-sm">
@@ -356,6 +391,9 @@ function isGroupCurrent(group: TimeGroup): boolean {
                             <td class="px-4 py-3">
                                 <div class="font-semibold text-gray-900">{{ slot.subject_code }} · {{ slot.subject_title }}</div>
                                 <div class="text-xs text-gray-500">{{ slot.section }}</div>
+                                <div v-if="isTrimmedByActualEnd(slot)" class="mt-1 text-xs font-semibold text-green-700">
+                                    Ended early at {{ formatTime(effectiveEndTime(slot)) }} · original end {{ formatOriginalEnd(slot) }}
+                                </div>
                                 <div
                                     v-if="blockingOverrideDetails(slot, allSlots)"
                                     class="mt-1 inline-flex rounded-full bg-pup-maroon-pale px-2 py-0.5 text-[11px] font-bold text-pup-maroon"

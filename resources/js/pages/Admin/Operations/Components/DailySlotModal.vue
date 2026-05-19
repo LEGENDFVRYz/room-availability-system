@@ -103,8 +103,42 @@ function formatTime(time: string): string {
     return `${hour % 12 || 12}:${minute.toString().padStart(2, '0')}${hour < 12 ? 'AM' : 'PM'}`;
 }
 
+function normalizeTimeValue(value?: string | null): string | null {
+    if (!value) return null;
+
+    const directTime = value.match(/^(\d{2}:\d{2})/);
+    if (directTime) return directTime[1];
+
+    const embeddedTime = value.match(/[T\s](\d{2}:\d{2})/);
+    if (embeddedTime) return embeddedTime[1];
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+
+    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+}
+
+function effectiveEndTime(slot: DailySlot): string {
+    if (!isClassSlot(slot) || slot.status !== 'completed') return slot.end_time;
+
+    const actualEnd = normalizeTimeValue(slot.actual_end);
+    if (!actualEnd) return slot.end_time;
+
+    return parseMinutes(actualEnd) > parseMinutes(slot.start_time) && parseMinutes(actualEnd) < parseMinutes(slot.end_time)
+        ? actualEnd
+        : slot.end_time;
+}
+
+function isTrimmedByActualEnd(slot: DailySlot): boolean {
+    return effectiveEndTime(slot) !== slot.end_time;
+}
+
 function formatTimeRange(slot: DailySlot): string {
-    return `${formatTime(slot.start_time)}–${formatTime(slot.end_time)}`;
+    return `${formatTime(slot.start_time)}–${formatTime(effectiveEndTime(slot))}`;
+}
+
+function formatOriginalEnd(slot: DailySlot): string {
+    return formatTime(slot.end_time);
 }
 
 function yearLevel(slot: DailySlot): YearLevel {
@@ -148,8 +182,8 @@ function statusDotClass(slot: DailySlot): string {
 }
 
 function slotsOverlap(first: DailySlot, second: DailySlot): boolean {
-    return parseMinutes(first.start_time) < parseMinutes(second.end_time)
-        && parseMinutes(first.end_time) > parseMinutes(second.start_time);
+    return parseMinutes(first.start_time) < parseMinutes(effectiveEndTime(second))
+        && parseMinutes(effectiveEndTime(first)) > parseMinutes(second.start_time);
 }
 
 function overlappingOverrides(slot: DailySlot, slots: DailySlot[]): DailySlot[] {
@@ -325,6 +359,9 @@ function applyAction() {
                     <p class="text-xs font-semibold uppercase tracking-wide text-pup-maroon">Schedule item</p>
                     <h3 class="mt-1 text-xl font-bold text-gray-900">{{ slot.subject_code }} · {{ slot.subject_title }}</h3>
                     <p class="mt-1 text-sm text-gray-500">{{ slot.section || 'Room status item' }} · {{ formatTimeRange(slot) }}</p>
+                    <p v-if="isTrimmedByActualEnd(slot)" class="mt-1 text-xs font-semibold text-green-700">
+                        Ended early · original end {{ formatOriginalEnd(slot) }}
+                    </p>
                 </div>
                 <button type="button" @click="emit('close')" class="rounded-full p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700">
                     <X class="h-5 w-5" />

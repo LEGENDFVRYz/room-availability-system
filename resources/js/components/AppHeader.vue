@@ -40,21 +40,27 @@ const isActiveNavItem = (item: NavItem): boolean => {
 const adminNavItems: NavItem[] = [
     { title: 'Dashboard', href: '/admin/dashboard/', icon: LayoutDashboard },
     { title: 'Operations', href: '/admin/operations/', icon: Activity },
-    { title: 'Schedules', href: '/admin/schedules', icon: CalendarDays },
+    { title: 'Schedules', href: '/admin/schedules/', icon: CalendarDays },
     { title: 'Manages', href: '/admin/manage/', icon: Settings2 },
     { title: 'Records', href: '#', icon: ClipboardList },
 ];
 
 const kioskNavItems: NavItem[] = [
-    { title: 'Dashboard', href: '#', icon: LayoutDashboard },
-    { title: 'Schedules', href: '#', icon: CalendarDays },
-    { title: 'Announcements', href: '#', icon: Megaphone },
+    { title: 'Dashboard', href: '/kiosk/dashboard/', icon: LayoutDashboard },
+    { title: 'Schedules', href: '/kiosk/schedules/', icon: CalendarDays },
+    { title: 'Announcements', href: '/kiosk/schedules/', icon: Megaphone },
 ];
 
 const navItems = computed<NavItem[]>(() => {
     if (inAdminDomain.value) return adminNavItems;
     if (inKioskDomain.value) return kioskNavItems;
     return [];
+});
+
+const dashboardLink = computed(() => {
+    if (inAdminDomain.value) return '/admin/dashboard';
+    if (inKioskDomain.value) return '/kiosk/dashboard';
+    return '/';
 });
 </script>
 
@@ -72,7 +78,7 @@ const navItems = computed<NavItem[]>(() => {
         <!-- Main Nav -->
         <nav class="sticky top-0 z-[100] flex h-[60px] items-center justify-between border-b-[3px] border-pup-gold bg-pup-maroon px-6">
             <!-- Brand -->
-            <Link href="#" class="flex shrink-0 items-center gap-3">
+            <Link :href="dashboardLink" class="flex shrink-0 items-center gap-3">
                 <div
                     class="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full border-2 border-pup-gold bg-pup-maroon-deep"
                 >

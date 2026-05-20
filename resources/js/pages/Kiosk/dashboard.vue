@@ -2,6 +2,7 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem, PageHeader } from '@/types';
 import { Head } from '@inertiajs/vue3';
+import Floorplan from '@/components/floorplan/floorplan.vue';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Room Map', href: '/dashboard' },
@@ -17,6 +18,9 @@ const pageheader: PageHeader = {
     <Head title="Public Dashboard" />
     
     <AppLayout :breadcrumbs="breadcrumbs" :pageheader="pageheader">
-        <h1>PUBLIC</h1>
+        
+        <!-- Floorplan Map Mockup -->
+        <Floorplan :show-panel="false" />
+
     </AppLayout>
 </template>

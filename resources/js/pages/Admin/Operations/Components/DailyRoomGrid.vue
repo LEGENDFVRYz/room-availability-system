@@ -423,6 +423,28 @@ const emit = defineEmits<{
                             }"
                             @click="emit('open-slot', slot)"
                         >
+                            <!-- Special Tags -->
+                            <div class="flex flex-col items-end gap-1 mb-2">
+                                <span
+                                    v-if="blockingOverrideLabel(slot, allSlots)"
+                                    class="rounded bg-pup-maroon/90 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white w-full text-center"
+                                >
+                                    Blocked
+                                </span>
+                                <span
+                                    v-if="isExceptionSlot(slot) && !isCancelledSlot(slot)"
+                                    class="rounded border border-pup-maroon/25 bg-pup-maroon-pale px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-pup-maroon w-full text-center"
+                                >
+                                    Exception
+                                </span>
+                                <span
+                                    v-if="isCancelledSlot(slot)"
+                                    class="rounded border border-gray-300 bg-white px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-gray-500 w-full text-center"
+                                >
+                                    Cancelled
+                                </span>
+                            </div>
+                            
                             <div class="flex flex-1 items-center justify-between gap-2 w-full min-w-0">
                                 <div class="min-w-0">
                                     <p class="line-clamp-2 text-[11px] font-bold leading-snug text-gray-900">

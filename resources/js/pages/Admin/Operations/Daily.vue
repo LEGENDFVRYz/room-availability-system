@@ -3,7 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import PillTabs from '@/components/PillTabs.vue';
 import type { BreadcrumbItem, PageHeader } from '@/types';
 import { Head, router, usePage } from '@inertiajs/vue3';
-import { AlertCircle, CalendarDays, Clock3, ClipboardPlus, RefreshCw, School } from 'lucide-vue-next';
+import { AlertCircle, CalendarDays, Clock3, Plus, RefreshCw, School } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import DailyFilters from './Components/DailyFilters.vue';
 import DailyRequestClassModal from './Components/DailyRequestClassModal.vue';
@@ -592,7 +592,7 @@ onUnmounted(() => {
                     @click="openClassModal"
                     class="inline-flex items-center gap-1.5 rounded-lg border border-pup-maroon/15 bg-white px-3.5 py-2 text-sm font-medium text-pup-maroon shadow-sm transition hover:bg-pup-maroon-pale"
                 >
-                    <ClipboardPlus class="h-4 w-4" />
+                    <Plus class="h-4 w-4" />
                     Request Class
                 </button>
             </div>
@@ -663,26 +663,25 @@ onUnmounted(() => {
                     <p class="text-xs text-green-600">selected rooms without active class</p>
                 </div>
                 <div class="rounded-xl border border-pup-gold/30 bg-pup-gold-pale/50 p-4 shadow-sm">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-pup-maroon">Reserved Now</p>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-pup-maroon">Reserved Now (Upcoming)</p>
                     <p class="mt-2 text-2xl font-bold text-pup-maroon-deep">
-                        {{ summaryStats.reservedNowCount }}
+                        {{ summaryStats.reservedNowCount }} ({{ summaryStats.upcomingSoonCount }})
                     </p>
-                    <p class="text-xs text-pup-maroon/70">classes awaiting claim</p>
+                    <p class="text-xs text-pup-maroon/70">classes are waiting to claim</p>
                 </div>
                 <div class="rounded-xl border border-red-100 bg-red-50/70 p-4 shadow-sm">
                     <p class="text-xs font-semibold uppercase tracking-wide text-red-500">Occupied Now</p>
                     <p class="mt-2 text-2xl font-bold text-red-800">
                         {{ summaryStats.occupiedNowCount }}
                     </p>
-                    <p class="text-xs text-red-600">marked as started</p>
+                    <p class="text-xs text-red-600">rooms currently occupied for classes</p>
                 </div>
                 <div class="rounded-xl border border-orange-100 bg-orange-50/70 p-4 shadow-sm">
                     <p class="text-xs font-semibold uppercase tracking-wide text-orange-600">Risk / Exceptions</p>
                     <p class="mt-2 text-2xl font-bold text-orange-800">
-                        {{ summaryStats.upcomingSoonCount }} /
                         {{ summaryStats.exceptionCount }}
                     </p>
-                    <p class="text-xs text-orange-600">starting soon / daily changes</p>
+                    <p class="text-xs text-orange-600">daily changes for selected date</p>
                 </div>
             </div>
 

@@ -35,7 +35,7 @@ export interface FloorplanLabeledBox extends FloorplanBox {
 }
 
 export interface FloorplanServiceArea extends FloorplanLabeledBox {
-    kind: 'service' | 'ignored';
+    kind: 'service' | 'stage' | 'ignored';
 }
 
 export interface FloorplanStair extends FloorplanBox {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import {
+    floorplanCanvas,
     floorplanCorridors,
     floorplanCourts,
     floorplanMainStair,
@@ -208,12 +209,18 @@ onUnmounted(() => {
             }"
         >
             <svg
-                viewBox="0 0 1600 720"
+                :viewBox="`${floorplanCanvas.x} ${floorplanCanvas.y} ${floorplanCanvas.w} ${floorplanCanvas.h}`"
                 class="block h-auto w-full min-w-[1000px] select-none"
                 role="img"
                 aria-label="Simplified floorplan"
             >
-                <rect x="0" y="0" width="1600" height="720" :fill="mapTheme.mapBackground" />
+                <rect
+                    :x="floorplanCanvas.x"
+                    :y="floorplanCanvas.y"
+                    :width="floorplanCanvas.w"
+                    :height="floorplanCanvas.h"
+                    :fill="mapTheme.mapBackground"
+                />
 
                 <!-- Corridor paths: intentionally no text labels. -->
                 <g aria-hidden="true">
@@ -241,7 +248,7 @@ onUnmounted(() => {
                             :height="court.h"
                             :fill="mapTheme.courtFill"
                             :stroke="mapTheme.courtStroke"
-                            stroke-width="1.4"
+                            stroke-width="1.8"
                             vector-effect="non-scaling-stroke"
                         />
                         <rect
@@ -317,29 +324,76 @@ onUnmounted(() => {
                         </text>
                     </g>
 
-                    <g v-for="area in floorplanServiceAreas" :key="`service-${area.x}-${area.y}`">
-                        <rect
-                            :x="area.x"
-                            :y="area.y"
-                            :width="area.w"
-                            :height="area.h"
-                            :fill="area.kind === 'ignored' ? mapTheme.ignoredFill : mapTheme.serviceFill"
-                            :stroke="area.kind === 'ignored' ? mapTheme.ignoredStroke : mapTheme.serviceStroke"
-                            stroke-width="1.8"
-                            vector-effect="non-scaling-stroke"
-                        />
-                        <text
-                            v-for="(line, index) in area.label"
-                            :key="`${line}-${index}`"
-                            :x="area.x + area.w / 2"
-                            :y="boxLabelY(area, index)"
-                            text-anchor="middle"
-                            class="pointer-events-none select-none font-sans font-bold"
-                            :fill="mapTheme.labelColor"
-                            :font-size="area.fs"
-                        >
-                            {{ line }}
-                        </text>
+                    <g v-for="area in floorplanServiceAreas" :key="`service-${area.kind}-${area.x}-${area.y}`">
+                        <!-- Stage -->
+                        <g v-if="area.kind === 'stage'">
+                            <!-- Main stage body -->
+                            <rect
+                                :x="area.x"
+                                :y="area.y"
+                                :width="area.w"
+                                :height="area.h"
+                                :fill="mapTheme.stageFill"
+                                :stroke="mapTheme.stageStroke"
+                                stroke-width="2"
+                                vector-effect="non-scaling-stroke"
+                            />
+
+                            <!-- Stage label -->
+                            <text
+                                v-for="(line, index) in area.label"
+                                :key="`${line}-${index}`"
+                                :x="area.x + area.w / 2"
+                                :y="boxLabelY(area, index)"
+                                text-anchor="middle"
+                                class="pointer-events-none select-none font-sans font-bold"
+                                :fill="mapTheme.stageTextColor"
+                                :font-size="area.fs"
+                            >
+                                {{ line }}
+                            </text>
+                        </g>
+
+                        <!-- Dark ignored rooms / stock rooms / elevator -->
+                        <g v-else-if="area.kind === 'ignored'">
+                            <rect
+                                :x="area.x"
+                                :y="area.y"
+                                :width="area.w"
+                                :height="area.h"
+                                :fill="mapTheme.ignoredFill"
+                                :stroke="mapTheme.ignoredStroke"
+                                stroke-width="1.8"
+                                vector-effect="non-scaling-stroke"
+                            />
+                        </g>
+
+                        <!-- Normal service areas -->
+                        <g v-else>
+                            <rect
+                                :x="area.x"
+                                :y="area.y"
+                                :width="area.w"
+                                :height="area.h"
+                                :fill="mapTheme.serviceFill"
+                                :stroke="mapTheme.serviceStroke"
+                                stroke-width="1.8"
+                                vector-effect="non-scaling-stroke"
+                            />
+
+                            <text
+                                v-for="(line, index) in area.label"
+                                :key="`${line}-${index}`"
+                                :x="area.x + area.w / 2"
+                                :y="boxLabelY(area, index)"
+                                text-anchor="middle"
+                                class="pointer-events-none select-none font-sans font-bold"
+                                :fill="mapTheme.labelColor"
+                                :font-size="area.fs"
+                            >
+                                {{ line }}
+                            </text>
+                        </g>
                     </g>
                 </g>
 
@@ -393,6 +447,16 @@ onUnmounted(() => {
                             :y="floorplanMainStair.y"
                             :width="floorplanMainStair.w"
                             :height="floorplanMainStair.h"
+                            :fill="mapTheme.stairFill"
+                            :stroke="mapTheme.stairStroke"
+                            stroke-width="1.8"
+                            vector-effect="non-scaling-stroke"
+                        />
+                        <rect
+                            :x="floorplanMainStair.x"
+                            :y="floorplanMainStair.y + (floorplanMainStair.h / 2)"
+                            :width="floorplanMainStair.w"
+                            :height="floorplanMainStair.h / 2"
                             :fill="mapTheme.stairFill"
                             :stroke="mapTheme.stairStroke"
                             stroke-width="1.8"
@@ -482,7 +546,11 @@ onUnmounted(() => {
                 </g>
             </svg>
 
-            <div v-if="showLegend" class="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm" :style="{ color: mapTheme.labelColor }">
+            <div
+                v-if="showLegend"
+                class="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-center text-sm"
+                :style="{ color: mapTheme.labelColor }"
+            >
                 <span class="inline-flex items-center gap-2">
                     <span
                         class="h-4 w-4 rounded border"
@@ -520,60 +588,6 @@ onUnmounted(() => {
                 </span>
             </div>
         </section>
-
-        <aside
-            v-if="showPanel"
-            class="rounded-2xl border p-4 shadow-sm lg:sticky lg:top-4"
-            :style="{
-                backgroundColor: mapTheme.panelBackground,
-                borderColor: mapTheme.panelBorder,
-            }"
-        >
-            <template v-if="selectedRoomData">
-                <p class="text-xs font-bold uppercase tracking-widest" :style="{ color: mapTheme.mutedLabelColor }">
-                    Selected room
-                </p>
-                <h2 class="mt-1 text-xl font-semibold leading-snug" :style="{ color: mapTheme.labelColor }">
-                    {{ selectedRoomData.label || getRoomTitle(selectedLayoutRoom) }}
-                </h2>
-
-                <dl class="mt-4 grid gap-3 text-sm">
-                    <div>
-                        <dt class="text-xs font-bold uppercase" :style="{ color: mapTheme.mutedLabelColor }">Status</dt>
-                        <dd class="mt-1 capitalize" :style="{ color: mapTheme.labelColor }">
-                            {{ formatStatus(selectedRoomData.status) }}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-xs font-bold uppercase" :style="{ color: mapTheme.mutedLabelColor }">Subject</dt>
-                        <dd class="mt-1" :style="{ color: mapTheme.labelColor }">
-                            {{ selectedRoomData.subject || 'None' }}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-xs font-bold uppercase" :style="{ color: mapTheme.mutedLabelColor }">Section</dt>
-                        <dd class="mt-1" :style="{ color: mapTheme.labelColor }">
-                            {{ selectedRoomData.section || 'None' }}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-xs font-bold uppercase" :style="{ color: mapTheme.mutedLabelColor }">Teacher</dt>
-                        <dd class="mt-1" :style="{ color: mapTheme.labelColor }">
-                            {{ selectedRoomData.teacher || 'None' }}
-                        </dd>
-                    </div>
-                </dl>
-            </template>
-
-            <template v-else>
-                <p class="text-xs font-bold uppercase tracking-widest" :style="{ color: mapTheme.mutedLabelColor }">
-                    Floorplan
-                </p>
-                <h2 class="mt-1 text-xl font-semibold" :style="{ color: mapTheme.labelColor }">Room map</h2>
-                <p class="mt-3 text-sm leading-6" :style="{ color: mapTheme.mutedLabelColor }">
-                    Click any valid room or fixed office to view its current schedule/status.
-                </p>
-            </template>
-        </aside>
+        
     </div>
 </template>

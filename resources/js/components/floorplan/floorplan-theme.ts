@@ -5,7 +5,7 @@ import type { FloorplanTheme } from './floorplan-types';
  * These colors are intentionally soft so they work well on an off-white dashboard background.
  */
 export const defaultFloorplanTheme: FloorplanTheme = {
-    mapBackground: '#fbf8f1',
+    mapBackground: '#fbf8f8',
     panelBackground: '#fffdf8',
     panelBorder: '#ded8cc',
 
@@ -15,16 +15,19 @@ export const defaultFloorplanTheme: FloorplanTheme = {
     officeStroke: '#344062',
 
     corridorFill: '#d8d5cf',
-    corridorStroke: '#a9a39a',
-    toiletFill: '#eeeae2',
+    corridorStroke: '#d8d5cf',  // easier way to make it cleaner
+    toiletFill: '#eeeae2',      
     toiletStroke: '#4f4b45',
     serviceFill: '#e6e1d8',
     serviceStroke: '#4a463f',
+    stageFill: '#f3f4f6',      
+    stageStroke: '#6b7280',
+    stageTextColor: '#4b5563', 
     ignoredFill: '#2c2b28',
     ignoredStroke: '#1f1e1c',
 
     courtFill: '#f8f4ed',
-    courtStroke: '#bdb7ad',
+    courtStroke: '#7c756b',
     courtDashStroke: '#cfc8bc',
 
     stairFill: '#ebe7df',

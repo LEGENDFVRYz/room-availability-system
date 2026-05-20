@@ -8,24 +8,25 @@ import type {
 } from './floorplan-types';
 
 /**
- * Manual editing guide:
- * x = left/right position
- * y = up/down position
- * w = width
- * h = height
- * fs = label font size
  *
- * Important: keep each room id stable. Laravel room_id must match the id here.
+ * Important: keep each room id constant for backend purposes.
  */
+export const floorplanCanvas = {
+    x: -10,
+    y: 0,
+    w: 1650,
+    h: 730,
+};
+
 export const floorplanRooms: FloorplanRoomLayout[] = [
     {
         id: 'ece_lab_306b',
         category: 'valid',
         label: ['ECE', 'LAB.', '306B'],
         shape: 'rect',
-        x: 160,
+        x: 150,
         y: 35,
-        w: 90,
+        w: 100,
         h: 150,
         fs: 12,
     },
@@ -102,7 +103,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         shape: 'rect',
         x: 1115,
         y: 35,
-        w: 190,
+        w: 175,
         h: 150,
         fs: 12,
     },
@@ -111,9 +112,9 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         category: 'valid',
         label: ['COMPUTER', 'CONTROL', 'LABORATORY', '302'],
         shape: 'rect',
-        x: 1305,
+        x: 1290,
         y: 35,
-        w: 145,
+        w: 190,
         h: 150,
         fs: 11,
     },
@@ -133,7 +134,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         category: 'valid',
         label: ['AUTOMATIC', 'CONTROL', 'LABORATORY', '308'],
         shape: 'polygon',
-        points: '20,350 150,350 150,455 120,455 120,520 20,520',
+        points: '20,350 150,350 150,520 75,520 75,590 20,590',
         x: 20,
         y: 350,
         w: 130,
@@ -161,7 +162,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         x: 215,
         y: 350,
         w: 160,
-        h: 95,
+        h: 90,
         fs: 12,
     },
     {
@@ -201,14 +202,13 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         id: 'electronics_workshop_318',
         category: 'valid',
         label: ['ELECTRONICS', 'WORKSHOP', '318'],
-        shape: 'polygon',
-        points: '1300,310 1420,310 1420,520 1390,520 1390,555 1300,555',
-        x: 1300,
-        y: 310,
-        w: 120,
-        h: 245,
-        labelX: 1358,
-        labelY: 430,
+        shape: 'rect',
+        x: 1260,
+        y: 335,
+        w: 160,
+        h: 185,
+        labelX: 1338,
+        labelY: 420,
         fs: 12,
     },
     {
@@ -218,19 +218,20 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         shape: 'rect',
         x: 1480,
         y: 255,
-        w: 100,
+        w: 130,
         h: 95,
         fs: 10,
     },
-    {
+{
         id: 'microcomputer_lab_317',
         category: 'valid',
         label: ['MICROCOMPUTER', 'LABORATORY', '317'],
-        shape: 'rect',
+        shape: 'polygon',
+        points: '1480,350 1610,350 1610,590 1555,590 1555,520 1480,520',
         x: 1480,
         y: 350,
-        w: 100,
-        h: 170,
+        w: 130, // 1610 - 1480 = 130
+        h: 240, // 590 - 350 = 240 (Your original 'h: 170' was too small for these points)
         fs: 11,
     },
     {
@@ -238,7 +239,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         category: 'valid',
         label: ['PERSONAL', 'COMPUTER', 'LAB-1', '310'],
         shape: 'rect',
-        x: 160,
+        x: 150,
         y: 590,
         w: 185,
         h: 115,
@@ -249,9 +250,9 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         category: 'valid',
         label: ['PERSONAL', 'COMPUTER', 'LAB-2', '311'],
         shape: 'rect',
-        x: 345,
+        x: 335,
         y: 590,
-        w: 185,
+        w: 195,
         h: 115,
         fs: 12,
     },
@@ -284,7 +285,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         shape: 'rect',
         x: 905,
         y: 590,
-        w: 190,
+        w: 200,
         h: 115,
         fs: 12,
     },
@@ -293,9 +294,9 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         category: 'valid',
         label: ['PERSONAL', 'COMPUTER', 'LAB-6', '315'],
         shape: 'rect',
-        x: 1095,
+        x: 1105,
         y: 590,
-        w: 190,
+        w: 200,
         h: 115,
         fs: 12,
     },
@@ -304,55 +305,78 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         category: 'valid',
         label: ['DIGITAL', 'CIRCUIT', 'LABORATORY', '316'],
         shape: 'rect',
-        x: 1285,
+        x: 1305,
         y: 590,
-        w: 165,
+        w: 175,
         h: 115,
         fs: 11,
     },
 ];
 
 export const floorplanCorridors: FloorplanBox[] = [
-    { x: 115, y: 185, w: 1365, h: 70 },
-    { x: 150, y: 520, w: 1330, h: 70 },
-    { x: 150, y: 255, w: 65, h: 265 },
-    { x: 1420, y: 255, w: 60, h: 335 },
-    { x: 765, y: 185, w: 65, h: 335 },
+    { x: 105,   y: 155, w: 1420, h: 100 },
+    { x: 100,   y: 520, w: 1420, h: 70 },
+    { x: 150,   y: 255, w: 115,   h: 265 },
+    { x: 1370,  y: 255, w: 115,   h: 265 },
+    { x: 765,   y: 255, w: 65,   h: 265 },
 ];
 
 export const floorplanCourts: FloorplanLabeledBox[] = [
     { label: ['OPEN', 'COURT'], x: 375, y: 255, w: 225, h: 265, fs: 15 },
-    { label: ['OPEN', 'COURT'], x: 940, y: 255, w: 360, h: 265, fs: 15 },
+    { label: ['OPEN', 'COURT'], x: 830, y: 255, w: 285, h: 265, fs: 15 },
+
+    // { label: ['OPEN', 'COURT'], x: 1165, y: 255, w: 135, h: 265, fs: 15 },
 ];
 
 export const floorplanToilets: FloorplanLabeledBox[] = [
-    { label: ['FEMALE', 'TOILET'], x: 20, y: 90, w: 95, h: 135, fs: 9 },
-    { label: ['MALE', 'TOILET'], x: 20, y: 590, w: 130, h: 80, fs: 9 },
-    { label: ['FEMALE', 'TOILET'], x: 1495, y: 90, w: 85, h: 135, fs: 9 },
-    { label: ['MALE', 'TOILET'], x: 1480, y: 590, w: 100, h: 80, fs: 9 },
+    { label: ['FEMALE', 'TOILET'],  x: 20,   y: 90,  w: 85,  h: 125, fs: 9 },
+    { label: ['MALE', 'TOILET'],    x: 20,   y: 590, w: 130, h: 70,  fs: 9 },
+    { label: ['FEMALE', 'TOILET'],  x: 1525, y: 90,  w: 85,  h: 125, fs: 9 },
+    { label: ['MALE', 'TOILET'],    x: 1480, y: 590, w: 130, h: 70,  fs: 9 },
 ];
 
 export const floorplanServiceAreas: FloorplanServiceArea[] = [
-    { kind: 'service', label: ['TOOL', 'ROOM'], x: 75, y: 520, w: 75, h: 70, fs: 9 },
+    { kind: 'service', label: ['TOOL', 'ROOM'], x: 75,   y: 520, w: 50, h: 70, fs: 9 },
+    { kind: 'service', label: ['TOOL', 'ROOM'], x: 1505, y: 520, w: 50, h: 70, fs: 9 },
+
+    { kind: 'stage', label: ['2ND FLOOR', 'STAGE'], x: 1115, y: 255, w: 145, h: 265, fs: 13 },
 
     // Darkened rooms. These remain visible as blocks, but no labels are shown.
-    { kind: 'ignored', label: [], x: 790, y: 255, w: 78, h: 78, fs: 0 },
-    { kind: 'ignored', label: [], x: 868, y: 255, w: 52, h: 78, fs: 0 },
+    { kind: 'ignored', label: [], x: 20,   y: 215, w: 85, h: 40, fs: 0 },
+    { kind: 'ignored', label: [], x: 1525, y: 215, w: 85, h: 40, fs: 0 },
+    { kind: 'ignored', label: [], x: 830,  y: 255, w: 40, h: 78, fs: 0 },
+    { kind: 'ignored', label: [], x: 870,  y: 255, w: 40, h: 78, fs: 0 },
+    { kind: 'ignored', label: [], x: 830,  y: 255, w: 40, h: 39, fs: 0 },
 ];
 
 export const floorplanSideStairs: FloorplanStair[] = [
-    { kind: 'emergency', x: 115, y: 90, w: 45, h: 135, direction: 'horizontal', lines: 11 },
-    { kind: 'emergency', x: 1450, y: 90, w: 45, h: 135, direction: 'horizontal', lines: 11 },
-    { kind: 'side', x: 215, y: 445, w: 160, h: 75, direction: 'vertical', lines: 12 },
-    { kind: 'side', x: 1300, y: 255, w: 120, h: 55, direction: 'vertical', lines: 12 },
+    { kind: 'emergency', x: 105,  y: 90,  w: 45, h: 30, direction: 'horizontal', lines: 0 },
+    { kind: 'emergency', x: 105,  y: 115, w: 22, h: 40, direction: 'horizontal', lines: 7 },
+    { kind: 'emergency', x: 127,  y: 115, w: 23, h: 40, direction: 'horizontal', lines: 7 },
+
+    { kind: 'emergency', x: 1480,  y: 90,  w: 45, h: 35, direction: 'horizontal', lines: 0 },
+    { kind: 'emergency', x: 1480,  y: 115, w: 22, h: 40, direction: 'horizontal', lines: 7 },
+    { kind: 'emergency', x: 1502,  y: 115, w: 23, h: 40, direction: 'horizontal', lines: 7 },
+
+    { kind: 'side', x: 265,  y: 440, w: 70, h: 40, direction: 'vertical', lines: 12 },
+    { kind: 'side', x: 265,  y: 480, w: 70, h: 40, direction: 'vertical', lines: 12 },
+    { kind: 'side', x: 335,  y: 440, w: 40, h: 80, direction: 'vertical', lines: 0 },
+
+    { kind: 'side', x: 1300,  y: 255, w: 70, h: 40, direction: 'vertical', lines: 12 },
+    { kind: 'side', x: 1300,  y: 295, w: 70, h: 40, direction: 'vertical', lines: 12 },
+    { kind: 'side', x: 1260,  y: 255, w: 40, h: 80, direction: 'vertical', lines: 0 },
+
+    // Tempororay main stair visuals
+    // { kind: 'side', x: 830,  y: 345, w: 70, h: 40, direction: 'vertical', lines: 12 },
+    // { kind: 'side', x: 1260,  y: 255, w: 40, h: 80, direction: 'vertical', lines: 0 },
 ];
 
 export const floorplanMainStair: FloorplanMainStair = {
-    x: 790,
+    x: 830,
     y: 345,
     w: 92,
     h: 96,
-    curveW: 43,
-    curveR: 48,
-    lines: 10,
+    curveW: 10,
+    curveR: 45,
+    lines: 13,
 };

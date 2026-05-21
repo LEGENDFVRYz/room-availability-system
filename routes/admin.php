@@ -51,6 +51,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified'])->group(
     Route::post('/operations/daily/change-room',                      [OperationController::class, 'changeRoom'])->name('operations.daily.change-room');
     Route::patch('/operations/daily/mark-started',                    [OperationController::class, 'markStarted'])->name('operations.daily.mark-started');
     Route::patch('/operations/daily/mark-completed',                  [OperationController::class, 'markCompleted'])->name('operations.daily.mark-completed');
+    Route::patch('/operations/daily/revert-started',                  [OperationController::class, 'revertStarted'])->name('operations.daily.revert-started');
+    Route::patch('/operations/daily/revert-completed',                [OperationController::class, 'revertCompleted'])->name('operations.daily.revert-completed');
+    Route::patch('/operations/daily/revert-cancellation',             [OperationController::class, 'revertCancellation'])->name('operations.daily.revert-cancellation');
     Route::delete('/operations/daily/exceptions/{scheduleException}', [OperationController::class, 'destroyException'])->name('operations.daily.exceptions.destroy');
 
     # Operations - Room Status

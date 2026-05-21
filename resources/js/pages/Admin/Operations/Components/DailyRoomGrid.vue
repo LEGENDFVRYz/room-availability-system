@@ -28,6 +28,7 @@ const STATUS_LABEL: Record<DailySlotStatus, string> = {
     ongoing: 'Occupied',
     completed: 'Finished',
     cancelled: 'Cancelled',
+    unclaimed: 'Unclaimed',
     auto_cancelled: 'Auto-cancelled',
     maintenance: 'Maintenance',
     unavailable: 'Unavailable',
@@ -53,6 +54,7 @@ const STATUS_BADGE: Record<DailySlotStatus, string> = {
     ongoing: 'bg-status-occupied-bg text-status-occupied',
     completed: 'bg-gray-100 text-gray-600',
     cancelled: 'bg-slate-100 text-slate-600',
+    unclaimed: 'bg-slate-100 text-slate-600',
     auto_cancelled: 'bg-rose-50 text-rose-700',
     maintenance: 'bg-status-maintenance-bg text-status-maintenance',
     unavailable: 'bg-pup-gray-200 text-pup-gray-800',
@@ -223,14 +225,19 @@ function overrideHasAffectedClass(slot: DailySlot, slots: DailySlot[]): boolean 
         return (
             isClassSlot(candidate) &&
             candidate.room_id === slot.room_id &&
-            !['cancelled', 'auto_cancelled'].includes(candidate.status) &&
+            !['cancelled', 'auto_cancelled', 'unclaimed'].includes(candidate.status) &&
             slotsOverlap(slot, candidate)
         );
     });
 }
 
 function isCancelledSlot(slot: DailySlot): boolean {
-    return slot.event_type === 'cancellation' || ['cancelled', 'auto_cancelled'].includes(slot.status);
+    return slot.event_type === 'cancellation' || ['cancelled', 'auto_cancelled', 'unclaimed'].includes(slot.status);
+}
+
+
+function inactiveSlotTag(slot: DailySlot): string {
+    return slot.status === 'unclaimed' ? 'Unclaimed' : 'Cancelled';
 }
 
 function statusDotClass(slot: DailySlot): string {
@@ -294,7 +301,7 @@ function slotBlockStyle(slot: DailySlot, slots: DailySlot[]): Record<string, str
     if (isCancelledSlot(slot)) {
         return {
             backgroundImage:
-                'transparent 3px, transparent 9px)',
+                'repeating-linear-gradient(135deg, rgba(107, 114, 128, 0.12) 0px, rgba(107, 114, 128, 0.12) 3px, transparent 3px, transparent 9px)',
         };
     }
 
@@ -441,7 +448,7 @@ const emit = defineEmits<{
                                     v-if="isCancelledSlot(slot)"
                                     class="rounded border border-gray-300 bg-white px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-gray-500 w-full text-center"
                                 >
-                                    Cancelled
+                                    {{ inactiveSlotTag(slot) }}
                                 </span>
                             </div>
                             

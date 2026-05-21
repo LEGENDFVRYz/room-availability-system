@@ -34,6 +34,7 @@ export type DailySlotStatus =
     | 'ongoing'
     | 'completed'
     | 'cancelled'
+    | 'unclaimed'
     | 'auto_cancelled'
     | 'maintenance'
     | 'unavailable'
@@ -63,6 +64,8 @@ export interface DailySlot {
     actual_end?: string | null;
     claimed_at?: string | null;
     auto_cancel_at?: string | null;
+    claim_deadline_at?: string | null;
+    claim_deadline_time?: string | null;
     starts_at?: string | null;
     ends_at?: string | null;
 }

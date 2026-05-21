@@ -135,21 +135,34 @@ class DailyOperationService
                     ]);
                 }
 
+                $originalStartTime = $this->timeValue($exception->start_time);
+                $originalEndTime = $this->timeValue($exception->end_time);
+                $effectiveStartTime = $this->effectiveRoomChangeStartTime(
+                    eventDate: $eventDate,
+                    term: $term,
+                    roomId: $newRoomId,
+                    startTime: $originalStartTime,
+                    endTime: $originalEndTime,
+                    ignoreScheduleId: $exception->schedule_id,
+                );
+
                 $this->assertRoomSlotAvailable(
                     eventDate: $eventDate,
                     term: $term,
                     roomId: $newRoomId,
-                    startTime: $this->timeValue($exception->start_time),
-                    endTime: $this->timeValue($exception->end_time),
+                    startTime: $effectiveStartTime,
+                    endTime: $originalEndTime,
                     ignoreScheduleId: $exception->schedule_id,
                     ignoreExceptionId: $exception->id,
                 );
 
                 $exception->update([
                     'room_id'        => $newRoomId,
+                    'start_time'     => $effectiveStartTime,
+                    'end_time'       => $originalEndTime,
                     'reason'         => $reason ?: $exception->reason,
                     'status'         => 'pending',
-                    'auto_cancel_at' => $this->autoCancelAt($eventDate, $this->timeValue($exception->start_time)),
+                    'auto_cancel_at' => $this->autoCancelAt($eventDate, $effectiveStartTime),
                     'claimed_at'     => null,
                     'updated_by'     => $userId,
                 ]);
@@ -172,12 +185,23 @@ class DailyOperationService
                 ]);
             }
 
+            $originalStartTime = $this->timeValue($schedule->start_time);
+            $originalEndTime = $this->timeValue($schedule->end_time);
+            $effectiveStartTime = $this->effectiveRoomChangeStartTime(
+                eventDate: $eventDate,
+                term: $term,
+                roomId: $newRoomId,
+                startTime: $originalStartTime,
+                endTime: $originalEndTime,
+                ignoreScheduleId: $schedule->id,
+            );
+
             $this->assertRoomSlotAvailable(
                 eventDate: $eventDate,
                 term: $term,
                 roomId: $newRoomId,
-                startTime: $this->timeValue($schedule->start_time),
-                endTime: $this->timeValue($schedule->end_time),
+                startTime: $effectiveStartTime,
+                endTime: $originalEndTime,
                 ignoreScheduleId: $schedule->id,
             );
 
@@ -190,15 +214,15 @@ class DailyOperationService
                 [
                     'academic_term_id' => $term->id,
                     'room_id'          => $newRoomId,
-                    'start_time'       => $schedule->start_time,
-                    'end_time'         => $schedule->end_time,
+                    'start_time'       => $effectiveStartTime,
+                    'end_time'         => $originalEndTime,
                     'subject_code'     => $schedule->subject_code,
                     'subject_title'    => $schedule->subject_title,
                     'section'          => $schedule->section,
                     'instructor_name'  => $schedule->instructor_name,
                     'reason'           => $reason,
                     'status'           => 'pending',
-                    'auto_cancel_at'   => $this->autoCancelAt($eventDate, $this->timeValue($schedule->start_time)),
+                    'auto_cancel_at'   => $this->autoCancelAt($eventDate, $effectiveStartTime),
                     'claimed_at'       => null,
                     'created_by'       => $userId,
                     'updated_by'       => $userId,
@@ -675,6 +699,66 @@ class DailyOperationService
         $log->save();
 
         return $log;
+    }
+
+
+    /**
+     * Change-room actions do not expose a custom start time in the UI because
+     * they normally reuse the selected class window. When the target room is
+     * blocked only by an unclaimed regular class, the request should claim the
+     * remaining reclaimable time instead of failing against the protected claim
+     * window. This does not create an unclaimed usage log and does not edit the
+     * weekly schedule template.
+     */
+    private function effectiveRoomChangeStartTime(
+        string $eventDate,
+        AcademicTerm $term,
+        int $roomId,
+        string $startTime,
+        string $endTime,
+        ?int $ignoreScheduleId = null,
+    ): string {
+        $startTime = $this->timeValue($startTime);
+        $endTime = $this->timeValue($endTime);
+        $dayOfWeek = Carbon::parse($eventDate)->dayOfWeekIso;
+        $replacedScheduleIds = $this->replacedScheduleIdsForDate($eventDate, $term->id);
+        $effectiveStartTime = $startTime;
+
+        $scheduleConflicts = Schedule::query()
+            ->active()
+            ->where('academic_term_id', $term->id)
+            ->where('room_id', $roomId)
+            ->where('day_of_week', $dayOfWeek)
+            ->where('start_time', '<', $endTime)
+            ->where('end_time', '>', $startTime)
+            ->when($ignoreScheduleId, fn ($query) => $query->whereKeyNot($ignoreScheduleId))
+            ->when($replacedScheduleIds->isNotEmpty(), fn ($query) => $query->whereNotIn('id', $replacedScheduleIds))
+            ->orderBy('start_time')
+            ->get();
+
+        foreach ($scheduleConflicts as $scheduleConflict) {
+            [$conflictStart, $conflictEnd, $windowState] = $this->effectiveScheduleWindow($scheduleConflict, $eventDate);
+
+            if ($windowState !== 'unclaimed') {
+                continue;
+            }
+
+            if ($conflictStart > $effectiveStartTime || $conflictEnd <= $effectiveStartTime) {
+                continue;
+            }
+
+            $effectiveStartTime = $conflictEnd;
+        }
+
+        if ($effectiveStartTime >= $endTime) {
+            throw ValidationException::withMessages([
+                'room_id' => 'The selected room is only reclaimable after this class has already ended. Choose another room or time.',
+                'start_time' => 'The remaining reclaimable time must start before the class end time.',
+                'end_time' => 'The remaining reclaimable time must start before the class end time.',
+            ]);
+        }
+
+        return $effectiveStartTime;
     }
 
     private function assertRoomSlotAvailable(

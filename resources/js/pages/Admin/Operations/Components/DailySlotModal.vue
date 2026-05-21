@@ -334,6 +334,59 @@ const roomLabel = (roomId: number) => {
     return room ? `${room.code} · ${room.name}` : `Room #${roomId}`;
 };
 
+function timeFromMinutes(totalMinutes: number): string {
+    const hour = Math.floor(totalMinutes / 60);
+    const minute = totalMinutes % 60;
+
+    return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+}
+
+const remainingTimeRoomChangeNotice = computed(() => {
+    const slot = props.slot;
+
+    if (!slot || activeAction.value !== 'change-room' || !changeRoomId.value) {
+        return null;
+    }
+
+    const targetRoomId = Number(changeRoomId.value);
+    const originalStartMinutes = parseMinutes(slot.start_time);
+    const originalEndTime = effectiveEndTime(slot);
+    const originalEndMinutes = parseMinutes(originalEndTime);
+    let effectiveStartMinutes = originalStartMinutes;
+
+    props.allSlots
+        .filter((candidate) => {
+            return candidate.room_id === targetRoomId
+                && candidate.status === 'unclaimed'
+                && candidate.source === 'schedule'
+                && slotsOverlap(slot, candidate);
+        })
+        .forEach((candidate) => {
+            const claimDeadline = candidate.claim_deadline_time ?? normalizeTimeValue(candidate.claim_deadline_at) ?? null;
+            if (!claimDeadline) return;
+
+            const claimStartMinutes = parseMinutes(candidate.start_time);
+            const claimDeadlineMinutes = parseMinutes(claimDeadline);
+
+            if (claimStartMinutes <= effectiveStartMinutes && claimDeadlineMinutes > effectiveStartMinutes && claimDeadlineMinutes < originalEndMinutes) {
+                effectiveStartMinutes = claimDeadlineMinutes;
+            }
+        });
+
+    if (effectiveStartMinutes <= originalStartMinutes || effectiveStartMinutes >= originalEndMinutes) {
+        return null;
+    }
+
+    const effectiveStartTime = timeFromMinutes(effectiveStartMinutes);
+
+    return {
+        room: roomLabel(targetRoomId),
+        startTime: effectiveStartTime,
+        startLabel: formatTime(effectiveStartTime),
+        endLabel: formatTime(originalEndTime),
+    };
+});
+
 watch(
     () => props.slot,
     (slot) => {
@@ -555,6 +608,18 @@ function applyAction() {
                             </option>
                         </select>
                     </label>
+
+                    <div
+                        v-if="activeAction === 'change-room' && remainingTimeRoomChangeNotice"
+                        class="mt-4 rounded-xl border border-pup-gold/40 bg-pup-gold-pale/60 px-3.5 py-3 text-sm text-pup-maroon-dark"
+                    >
+                        <p class="font-semibold">Remaining-time room change</p>
+                        <p class="mt-1 text-xs leading-relaxed text-pup-maroon-dark/80">
+                            {{ remainingTimeRoomChangeNotice.room }} has an unclaimed class claim window before
+                            {{ remainingTimeRoomChangeNotice.startLabel }}. This change will be saved only for
+                            {{ remainingTimeRoomChangeNotice.startLabel }}–{{ remainingTimeRoomChangeNotice.endLabel }}.
+                        </p>
+                    </div>
 
                     <label v-if="activeAction === 'cancel' || activeAction === 'change-room'" class="mt-4 flex flex-col gap-1 text-sm font-medium text-gray-600">
                         Reason

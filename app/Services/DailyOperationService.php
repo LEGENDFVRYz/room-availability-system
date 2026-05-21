@@ -266,6 +266,181 @@ class DailyOperationService
         });
     }
 
+    public function revertStarted(array $data, int $userId): RoomUsageLog
+    {
+        return DB::transaction(function () use ($data, $userId) {
+            $eventDate = Carbon::parse($data['event_date'])->toDateString();
+
+            if (! empty($data['exception_id'])) {
+                $exception = ScheduleException::findOrFail($data['exception_id']);
+                $usageLog = $this->existingExceptionUsageLog($exception);
+
+                $this->assertUsageLogStatus(
+                    usageLog: $usageLog,
+                    allowedStatuses: ['occupied'],
+                    messageKey: 'exception_id',
+                    message: 'Only started classes can have their start action reverted.',
+                );
+
+                $exception->update([
+                    'status'     => 'pending',
+                    'claimed_at' => null,
+                    'updated_by' => $userId,
+                ]);
+
+                return $this->resetUsageLogToAwaiting($usageLog, $userId);
+            }
+
+            if (empty($data['schedule_id'])) {
+                throw ValidationException::withMessages([
+                    'schedule_id' => 'A schedule or exception is required.',
+                ]);
+            }
+
+            $schedule = Schedule::findOrFail($data['schedule_id']);
+            $usageLog = $this->existingScheduleUsageLog($schedule, $eventDate);
+
+            $this->assertUsageLogStatus(
+                usageLog: $usageLog,
+                allowedStatuses: ['occupied'],
+                messageKey: 'schedule_id',
+                message: 'Only started classes can have their start action reverted.',
+            );
+
+            return $this->resetUsageLogToAwaiting($usageLog, $userId);
+        });
+    }
+
+    public function revertCompleted(array $data, int $userId): RoomUsageLog
+    {
+        return DB::transaction(function () use ($data, $userId) {
+            $eventDate = Carbon::parse($data['event_date'])->toDateString();
+
+            if (! empty($data['exception_id'])) {
+                $exception = ScheduleException::findOrFail($data['exception_id']);
+                $usageLog = $this->existingExceptionUsageLog($exception);
+
+                $this->assertUsageLogStatus(
+                    usageLog: $usageLog,
+                    allowedStatuses: ['completed'],
+                    messageKey: 'exception_id',
+                    message: 'Only completed classes can have their completion reverted.',
+                );
+
+                $exception->update([
+                    'status'     => 'ongoing',
+                    'claimed_at' => $exception->claimed_at ?: ($usageLog->actual_start ?: now()),
+                    'updated_by' => $userId,
+                ]);
+
+                return $this->reopenCompletedUsageLog($usageLog, $userId);
+            }
+
+            if (empty($data['schedule_id'])) {
+                throw ValidationException::withMessages([
+                    'schedule_id' => 'A schedule or exception is required.',
+                ]);
+            }
+
+            $schedule = Schedule::findOrFail($data['schedule_id']);
+            $usageLog = $this->existingScheduleUsageLog($schedule, $eventDate);
+
+            $this->assertUsageLogStatus(
+                usageLog: $usageLog,
+                allowedStatuses: ['completed'],
+                messageKey: 'schedule_id',
+                message: 'Only completed classes can have their completion reverted.',
+            );
+
+            return $this->reopenCompletedUsageLog($usageLog, $userId);
+        });
+    }
+
+    public function revertCancellation(array $data, int $userId): RoomUsageLog
+    {
+        return DB::transaction(function () use ($data, $userId) {
+            $eventDate = Carbon::parse($data['event_date'])->toDateString();
+
+            if (! empty($data['exception_id'])) {
+                $exception = ScheduleException::with('schedule')->findOrFail($data['exception_id']);
+                $eventType = $this->enumValue($exception->event_type);
+                $exceptionStatus = $this->enumValue($exception->status);
+
+                if ($eventType === 'cancellation') {
+                    $schedule = $exception->schedule;
+
+                    if (! $schedule) {
+                        throw ValidationException::withMessages([
+                            'exception_id' => 'The cancelled schedule record is no longer available.',
+                        ]);
+                    }
+
+                    $this->assertScheduleCanBeRestored($schedule, $eventDate, $exception->id);
+
+                    $usageLog = $this->existingScheduleUsageLog($schedule, $eventDate)
+                        ?? $this->markScheduleUsage($schedule, $eventDate, 'reserved', $userId);
+
+                    $usageLog = $this->resetUsageLogToAwaiting($usageLog, $userId);
+                    $exception->delete();
+
+                    return $usageLog;
+                }
+
+                if ($exceptionStatus !== 'cancelled') {
+                    throw ValidationException::withMessages([
+                        'exception_id' => 'Only manually cancelled classes can be restored.',
+                    ]);
+                }
+
+                $this->assertExceptionCanBeRestored($exception);
+
+                $exception->update([
+                    'status'         => 'pending',
+                    'claimed_at'     => null,
+                    'auto_cancel_at' => $this->autoCancelAt(
+                        $this->dateValue($exception->event_date),
+                        $this->timeValue($exception->start_time ?: $exception->schedule?->start_time),
+                    ),
+                    'updated_by'     => $userId,
+                ]);
+
+                $usageLog = $this->existingExceptionUsageLog($exception)
+                    ?? $this->markExceptionUsage($exception, 'reserved', $userId);
+
+                return $this->resetUsageLogToAwaiting($usageLog, $userId);
+            }
+
+            if (empty($data['schedule_id'])) {
+                throw ValidationException::withMessages([
+                    'schedule_id' => 'A schedule or exception is required.',
+                ]);
+            }
+
+            $schedule = Schedule::findOrFail($data['schedule_id']);
+            $cancellationException = ScheduleException::query()
+                ->where('schedule_id', $schedule->id)
+                ->whereDate('event_date', $eventDate)
+                ->where('event_type', 'cancellation')
+                ->first();
+
+            $usageLog = $this->existingScheduleUsageLog($schedule, $eventDate);
+
+            if (! $cancellationException && $this->enumValue($usageLog?->status) !== 'cancelled') {
+                throw ValidationException::withMessages([
+                    'schedule_id' => 'No cancelled class record was found to restore.',
+                ]);
+            }
+
+            $this->assertScheduleCanBeRestored($schedule, $eventDate, $cancellationException?->id);
+
+            $usageLog ??= $this->markScheduleUsage($schedule, $eventDate, 'reserved', $userId);
+            $usageLog = $this->resetUsageLogToAwaiting($usageLog, $userId);
+            $cancellationException?->delete();
+
+            return $usageLog;
+        });
+    }
+
     public function markScheduleUsage(
         Schedule $schedule,
         string $eventDate,
@@ -320,6 +495,123 @@ class DailyOperationService
             ]);
 
         return $this->applyUsageStatus($log, $status, $userId, $actualStart, $actualEnd);
+    }
+
+
+    private function existingScheduleUsageLog(Schedule $schedule, string $eventDate): ?RoomUsageLog
+    {
+        return RoomUsageLog::query()
+            ->whereDate('usage_date', $eventDate)
+            ->where('source', 'schedule')
+            ->where('schedule_id', $schedule->id)
+            ->first();
+    }
+
+    private function existingExceptionUsageLog(ScheduleException $exception): ?RoomUsageLog
+    {
+        return RoomUsageLog::query()
+            ->whereDate('usage_date', $exception->event_date)
+            ->where('source', 'schedule_exception')
+            ->where('schedule_exception_id', $exception->id)
+            ->first();
+    }
+
+    /**
+     * A reverted start/cancellation should not delete the usage log. The log is
+     * moved back to the pre-claim reserved state and actual timestamps are
+     * cleared so Daily Operations falls back to scheduled/pending display state.
+     */
+    private function resetUsageLogToAwaiting(RoomUsageLog $log, int $userId): RoomUsageLog
+    {
+        $log->status = 'reserved';
+        $log->recorded_by = $userId;
+        $log->actual_start = null;
+        $log->actual_end = null;
+        $log->save();
+
+        return $log;
+    }
+
+    /**
+     * A reverted completion should reopen the class as ongoing while preserving
+     * the original actual_start timestamp from the borrowing log.
+     */
+    private function reopenCompletedUsageLog(RoomUsageLog $log, int $userId): RoomUsageLog
+    {
+        $log->status = 'occupied';
+        $log->recorded_by = $userId;
+        $log->actual_end = null;
+
+        if (! $log->actual_start) {
+            $log->actual_start = now();
+        }
+
+        $log->save();
+
+        return $log;
+    }
+
+    /**
+     * @param  array<int, string>  $allowedStatuses
+     */
+    private function assertUsageLogStatus(
+        ?RoomUsageLog $usageLog,
+        array $allowedStatuses,
+        string $messageKey,
+        string $message,
+    ): void {
+        if (! $usageLog || ! in_array($this->enumValue($usageLog->status), $allowedStatuses, true)) {
+            throw ValidationException::withMessages([
+                $messageKey => $message,
+                'usage_log_id' => 'The matching room usage log could not be found in the expected state.',
+            ]);
+        }
+    }
+
+    private function assertScheduleCanBeRestored(
+        Schedule $schedule,
+        string $eventDate,
+        ?int $ignoreExceptionId = null,
+    ): void {
+        $term = $this->resolveTermForDate($eventDate) ?? $schedule->academicTerm;
+
+        if (! $term) {
+            throw ValidationException::withMessages([
+                'event_date' => 'No academic term is available for the selected date.',
+            ]);
+        }
+
+        $this->assertRoomSlotAvailable(
+            eventDate: $eventDate,
+            term: $term,
+            roomId: $schedule->room_id,
+            startTime: $this->timeValue($schedule->start_time),
+            endTime: $this->timeValue($schedule->end_time),
+            ignoreScheduleId: $schedule->id,
+            ignoreExceptionId: $ignoreExceptionId,
+        );
+    }
+
+    private function assertExceptionCanBeRestored(ScheduleException $exception): void
+    {
+        $eventDate = $this->dateValue($exception->event_date);
+        $term = $this->resolveTermForDate($eventDate) ?? $exception->academicTerm;
+
+        if (! $term) {
+            throw ValidationException::withMessages([
+                'event_date' => 'No academic term is available for the selected date.',
+            ]);
+        }
+
+        $this->assertRoomSlotAvailable(
+            eventDate: $eventDate,
+            term: $term,
+            roomId: $exception->room_id,
+            startTime: $this->timeValue($exception->start_time ?: $exception->schedule?->start_time),
+            endTime: $this->timeValue($exception->end_time ?: $exception->schedule?->end_time),
+            ignoreScheduleId: $exception->schedule_id,
+            ignoreExceptionId: $exception->id,
+        );
     }
 
     private function applyUsageStatus(
@@ -621,6 +913,15 @@ class DailyOperationService
     private function autoCancelAt(string $eventDate, string $startTime): Carbon
     {
         return Carbon::parse("{$eventDate} {$startTime}")->addHour();
+    }
+
+    private function dateValue(mixed $value): string
+    {
+        if ($value instanceof Carbon) {
+            return $value->toDateString();
+        }
+
+        return Carbon::parse($value)->toDateString();
     }
 
     private function timeValue(mixed $value): string

@@ -355,6 +355,46 @@ class OperationController extends Controller
         return back()->with('success', 'Class marked as completed.');
     }
 
+
+    public function revertStarted(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'event_date'   => ['required', 'date'],
+            'schedule_id'  => ['nullable', 'integer', 'exists:tbl_schedules,id'],
+            'exception_id' => ['nullable', 'integer', 'exists:tbl_schedule_exceptions,id'],
+        ]);
+
+        $this->dailyOperationService->revertStarted($validated, $request->user()->id);
+
+        return back()->with('success', 'Class start reverted and usage log reset.');
+    }
+
+    public function revertCompleted(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'event_date'   => ['required', 'date'],
+            'schedule_id'  => ['nullable', 'integer', 'exists:tbl_schedules,id'],
+            'exception_id' => ['nullable', 'integer', 'exists:tbl_schedule_exceptions,id'],
+        ]);
+
+        $this->dailyOperationService->revertCompleted($validated, $request->user()->id);
+
+        return back()->with('success', 'Class completion reverted and usage log reopened.');
+    }
+
+    public function revertCancellation(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'event_date'   => ['required', 'date'],
+            'schedule_id'  => ['nullable', 'integer', 'exists:tbl_schedules,id'],
+            'exception_id' => ['nullable', 'integer', 'exists:tbl_schedule_exceptions,id'],
+        ]);
+
+        $this->dailyOperationService->revertCancellation($validated, $request->user()->id);
+
+        return back()->with('success', 'Class cancellation reverted and usage log reset.');
+    }
+
     public function destroyException(ScheduleException $scheduleException): RedirectResponse
     {
         $scheduleException->delete();

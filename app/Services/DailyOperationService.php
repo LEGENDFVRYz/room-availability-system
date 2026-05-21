@@ -13,6 +13,11 @@ use Illuminate\Validation\ValidationException;
 
 class DailyOperationService
 {
+    public function claimGraceMinutes(): int
+    {
+        return max(1, (int) config('daily_operations.claim_grace_minutes', 60));
+    }
+
     public function requestClass(array $data, int $userId): ScheduleException
     {
         $eventDate = Carbon::parse($data['event_date'])->toDateString();
@@ -218,6 +223,21 @@ class DailyOperationService
                     ]);
                 }
 
+                $eventDate = $this->dateValue($exception->event_date);
+                $term = $this->resolveTermForDate($eventDate) ?? $exception->academicTerm;
+
+                if ($term) {
+                    $this->assertRoomSlotAvailable(
+                        eventDate: $eventDate,
+                        term: $term,
+                        roomId: $exception->room_id,
+                        startTime: $this->timeValue($exception->start_time ?: $exception->schedule?->start_time),
+                        endTime: $this->timeValue($exception->end_time ?: $exception->schedule?->end_time),
+                        ignoreScheduleId: $exception->schedule_id,
+                        ignoreExceptionId: $exception->id,
+                    );
+                }
+
                 $exception->update([
                     'status'     => 'ongoing',
                     'claimed_at' => now(),
@@ -234,6 +254,18 @@ class DailyOperationService
             }
 
             $schedule = Schedule::findOrFail($data['schedule_id']);
+            $term = $this->resolveTermForDate($eventDate) ?? $schedule->academicTerm;
+
+            if ($term) {
+                $this->assertRoomSlotAvailable(
+                    eventDate: $eventDate,
+                    term: $term,
+                    roomId: $schedule->room_id,
+                    startTime: $this->timeValue($schedule->start_time),
+                    endTime: $this->timeValue($schedule->end_time),
+                    ignoreScheduleId: $schedule->id,
+                );
+            }
 
             return $this->markScheduleUsage($schedule, $eventDate, 'occupied', $userId, actualStart: now());
         });
@@ -687,15 +719,21 @@ class DailyOperationService
             ->get();
 
         foreach ($scheduleConflicts as $scheduleConflict) {
-            [$effectiveStart, $effectiveEnd, $wasTrimmed] = $this->effectiveScheduleWindow($scheduleConflict, $eventDate);
+            [$effectiveStart, $effectiveEnd, $windowState] = $this->effectiveScheduleWindow($scheduleConflict, $eventDate);
 
             if (! $this->timeWindowsOverlap($startTime, $endTime, $effectiveStart, $effectiveEnd)) {
                 continue;
             }
 
+            $conflictType = match ($windowState) {
+                'completed' => 'completed regular class',
+                'unclaimed' => 'regular class claim window',
+                default => 'regular class',
+            };
+
             $this->throwSlotConflict(
                 roomLabel: $this->roomLabel($roomId),
-                conflictType: $wasTrimmed ? 'completed regular class' : 'regular class',
+                conflictType: $conflictType,
                 subjectCode: $scheduleConflict->subject_code ?? 'Class',
                 startTime: $effectiveStart,
                 endTime: $effectiveEnd,
@@ -718,7 +756,7 @@ class DailyOperationService
             ->get();
 
         foreach ($exceptionConflicts as $exceptionConflict) {
-            [$effectiveStart, $effectiveEnd, $wasTrimmed] = $this->effectiveExceptionWindow($exceptionConflict);
+            [$effectiveStart, $effectiveEnd, $windowState] = $this->effectiveExceptionWindow($exceptionConflict);
 
             if (! $this->timeWindowsOverlap($startTime, $endTime, $effectiveStart, $effectiveEnd)) {
                 continue;
@@ -726,7 +764,7 @@ class DailyOperationService
 
             $this->throwSlotConflict(
                 roomLabel: $this->roomLabel($roomId),
-                conflictType: ($wasTrimmed ? 'completed ' : '') . str_replace('_', ' ', $this->enumValue($exceptionConflict->event_type)),
+                conflictType: ($windowState === 'completed' ? 'completed ' : '') . str_replace('_', ' ', $this->enumValue($exceptionConflict->event_type)),
                 subjectCode: $exceptionConflict->subject_code ?: ($exceptionConflict->schedule?->subject_code ?? 'Class'),
                 startTime: $effectiveStart,
                 endTime: $effectiveEnd,
@@ -737,12 +775,12 @@ class DailyOperationService
     /**
      * Returns the conflict window that should still block same-day class requests.
      *
-     * If a scheduled class has already been completed and its actual end is before
-     * the expected end, the remaining room time is free for another valid class
-     * request. The original schedule row is not edited; only the same-day conflict
-     * check is shortened by the usage log.
+     * Completed classes only block until actual_end. Unclaimed regular classes
+     * only block until their claim deadline; after that deadline the remaining
+     * time can be reclaimed by a special/makeup/change-room operation without
+     * writing an "unclaimed" usage-log row for the original schedule.
      *
-     * @return array{0:string,1:string,2:bool}
+     * @return array{0:string,1:string,2:string|null}
      */
     private function effectiveScheduleWindow(Schedule $schedule, string $eventDate): array
     {
@@ -755,11 +793,21 @@ class DailyOperationService
             ->where('schedule_id', $schedule->id)
             ->first();
 
-        return $this->trimWindowByCompletedUsageLog($startTime, $endTime, $usageLog);
+        [$effectiveStart, $effectiveEnd, $windowState] = $this->trimWindowByCompletedUsageLog($startTime, $endTime, $usageLog);
+
+        if ($windowState !== null) {
+            return [$effectiveStart, $effectiveEnd, $windowState];
+        }
+
+        if ($this->scheduleIsUnclaimed($eventDate, $startTime, $endTime, $usageLog)) {
+            return [$startTime, $this->claimDeadlineTime($eventDate, $startTime), 'unclaimed'];
+        }
+
+        return [$startTime, $endTime, null];
     }
 
     /**
-     * @return array{0:string,1:string,2:bool}
+     * @return array{0:string,1:string,2:string|null}
      */
     private function effectiveExceptionWindow(ScheduleException $exception): array
     {
@@ -776,25 +824,67 @@ class DailyOperationService
     }
 
     /**
-     * @return array{0:string,1:string,2:bool}
+     * @return array{0:string,1:string,2:string|null}
      */
     private function trimWindowByCompletedUsageLog(string $startTime, string $endTime, ?RoomUsageLog $usageLog): array
     {
-        if (! $usageLog || $this->enumValue($usageLog->status) !== 'completed' || ! $usageLog->actual_end) {
-            return [$startTime, $endTime, false];
+        if (! $usageLog) {
+            return [$startTime, $endTime, null];
+        }
+
+        $status = $this->enumValue($usageLog->status);
+
+        if (in_array($status, ['cancelled', 'auto_cancelled'], true)) {
+            return [$startTime, $startTime, $status];
+        }
+
+        if ($status !== 'completed' || ! $usageLog->actual_end) {
+            return [$startTime, $endTime, null];
         }
 
         $actualEnd = $this->timeValue($usageLog->actual_end);
 
         if ($actualEnd <= $startTime) {
-            return [$startTime, $startTime, true];
+            return [$startTime, $startTime, 'completed'];
         }
 
         if ($actualEnd < $endTime) {
-            return [$startTime, $actualEnd, true];
+            return [$startTime, $actualEnd, 'completed'];
         }
 
-        return [$startTime, $endTime, false];
+        return [$startTime, $endTime, null];
+    }
+
+    private function scheduleIsUnclaimed(string $eventDate, string $startTime, string $endTime, ?RoomUsageLog $usageLog): bool
+    {
+        $claimDeadline = $this->claimDeadlineAt($eventDate, $startTime);
+        $scheduleEnd = Carbon::parse("{$eventDate} {$endTime}");
+
+        if ($claimDeadline->greaterThanOrEqualTo($scheduleEnd)) {
+            return false;
+        }
+
+        if (now()->lessThan($claimDeadline)) {
+            return false;
+        }
+
+        $status = $this->enumValue($usageLog?->status);
+
+        if ($status !== '' && ! in_array($status, ['reserved'], true)) {
+            return false;
+        }
+
+        return ! $usageLog || (! $usageLog->actual_start && ! $usageLog->actual_end);
+    }
+
+    private function claimDeadlineAt(string $eventDate, string $startTime): Carbon
+    {
+        return Carbon::parse("{$eventDate} {$startTime}")->addMinutes($this->claimGraceMinutes());
+    }
+
+    private function claimDeadlineTime(string $eventDate, string $startTime): string
+    {
+        return $this->claimDeadlineAt($eventDate, $startTime)->format('H:i');
     }
 
     private function timeWindowsOverlap(string $firstStart, string $firstEnd, string $secondStart, string $secondEnd): bool
@@ -912,7 +1002,7 @@ class DailyOperationService
 
     private function autoCancelAt(string $eventDate, string $startTime): Carbon
     {
-        return Carbon::parse("{$eventDate} {$startTime}")->addHour();
+        return $this->claimDeadlineAt($eventDate, $startTime);
     }
 
     private function dateValue(mixed $value): string

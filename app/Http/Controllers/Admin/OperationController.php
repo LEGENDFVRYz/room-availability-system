@@ -273,10 +273,11 @@ class OperationController extends Controller
             ->values();
 
         return Inertia::render('Admin/Operations/Daily', [
-            'rooms'             => $rooms,
-            'daily_schedules'   => $dailySchedules,
-            'selected_date'     => $selectedDate,
-            'operation_term_id' => $operationTerm?->id,
+            'rooms'                => $rooms,
+            'daily_schedules'      => $dailySchedules,
+            'selected_date'        => $selectedDate,
+            'operation_term_id'    => $operationTerm?->id,
+            'claim_grace_minutes'  => $this->dailyOperationService->claimGraceMinutes(),
         ]);
     }
 

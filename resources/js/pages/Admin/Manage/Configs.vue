@@ -6,6 +6,18 @@ import { Head, useForm, usePage } from '@inertiajs/vue3';
 import { Building2, Settings2, GraduationCap, Server, Plus, ChevronDown } from 'lucide-vue-next';
 import { computed } from 'vue';
 
+// Page Props
+const props = defineProps<{
+    configs: {
+        claim_grace_minutes: number;
+        room_status_poll_interval: number;
+        kiosk_poll_interval: number;
+        status_warning_minutes: number;
+        kiosk_display_name: string;
+        kiosk_show_clock: boolean;
+        kiosk_notice_rotation_seconds: number;
+    }
+}>();
 
 // Props and template config
 const page = usePage<SharedData>();
@@ -54,14 +66,33 @@ function submit() {
         preserveScroll: true,
     });
 }
-
-// ── System info ───────────────────────────────────────────────────────────────
-
+        // claim_grace_minutes: number;
+        // room_status_poll_interval: number;
+        // kiosk_poll_interval: number;
+        // status_warning_minutes: number;
+        // kiosk_display_name: string;
+        // kiosk_show_clock: boolean;
+        // kiosk_notice_rotation_seconds: number;
+// System info 
 const systemInfo = [
     { label: 'System Version',      value: 'v1.0.0-alpha' },
     { label: 'Department',          value: 'Computer Engineering' },
-    { label: 'Kiosk Refresh Rate',  value: 'Every 15 seconds' },
-    { label: 'Public Page Refresh', value: 'Every 30 seconds' },
+    { 
+        label: 'Kiosk Refresh Rate',  
+        value: `Every ${props.configs.kiosk_poll_interval / 1000} seconds` 
+    },
+    { 
+        label: 'Kiosk Notice Rotation', 
+        value: `Every ${props.configs.kiosk_notice_rotation_seconds} seconds` 
+    },
+    { 
+        label: 'Public Page Refresh', 
+        value: `Every ${props.configs.room_status_poll_interval / 1000} seconds` 
+    },
+    { 
+        label: 'Daily Operation Grace Period', 
+        value: `Every ${props.configs.claim_grace_minutes} minutes` 
+    },
 ];
 </script>
 
@@ -78,7 +109,7 @@ const systemInfo = [
         <!-- 2-column grid (matching original design) -->
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
 
-            <!-- ── Academic Settings card ──────────────────────────────── -->
+            <!--  Academic Settings card -->
             <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
                 <div class="mb-5 flex items-center gap-3">
                     <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-pup-maroon/10">
@@ -158,7 +189,7 @@ const systemInfo = [
                 </div>
             </div>
 
-            <!-- ── System Information card ──────────────────────────────── -->
+            <!-- System information card -->
             <div class="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
                 <div class="mb-5 flex items-center gap-3">
                     <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-pup-gold/15">
@@ -182,7 +213,7 @@ const systemInfo = [
                 </div>
             </div>
 
-            <!-- ── Future config placeholder ────────────────────────────── -->
+            <!-- Future config placeholder -->
             <div class="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50/50 py-10 lg:col-span-2">
                 <Plus class="mb-2 h-8 w-8 text-gray-300" />
                 <p class="text-sm font-medium text-gray-400">More configuration options coming soon</p>

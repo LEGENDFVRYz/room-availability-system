@@ -103,7 +103,22 @@ class ManageController extends Controller
     public function configs(): Response
     {
         // currentTerm is automatically injected by middleware
-        return Inertia::render('Admin/Manage/Configs');
+        return Inertia::render('Admin/Manage/Configs', [
+            'configs' => [
+                // System Polling
+                'room_status_poll_interval'     => config('room-system.room_status_poll_interval', 30000),
+                'kiosk_poll_interval'           => config('room-system.kiosk_poll_interval', 15000),
+                'status_warning_minutes'        => config('room-system.status_warning_minutes', 15),
+
+                // Daily Operations
+                'claim_grace_minutes'           => config('daily_operations.claim_grace_minutes', 60),
+                
+                // Kiosk Configs
+                'kiosk_display_name'            => config('kiosk.display_name', 'CPE Room Availability Board'),
+                'kiosk_show_clock'              => config('kiosk.show_clock', true),
+                'kiosk_notice_rotation_seconds' => config('kiosk.notice_rotation_seconds', 10),
+            ]
+        ]);
     }
 
     public function setCurrentTerm(Request $request): RedirectResponse

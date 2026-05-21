@@ -59,6 +59,10 @@ export interface DailySlot {
     start_time: string;
     end_time: string;
     reason?: string | null;
+    actual_start?: string | null;
+    actual_end?: string | null;
+    claimed_at?: string | null;
+    auto_cancel_at?: string | null;
     starts_at?: string | null;
     ends_at?: string | null;
 }
@@ -84,7 +88,7 @@ export interface TimeGroup {
 
 export type ViewMode = 'room' | 'table';
 
-export type SlotAction = 'cancel' | 'change-room' | 'start' | 'complete';
+export type SlotAction = 'cancel' | 'change-room' | 'start' | 'complete' | 'revert-started' | 'revert-completed' | 'revert-cancellation';
 
 export interface ClassRequestPayload {
     event_type: 'special_class' | 'makeup_class';

@@ -563,6 +563,21 @@ function applySlotAction(payload: SlotActionPayload) {
 
     if (payload.action === 'complete') {
         router.patch('/admin/operations/daily/mark-completed', basePayload, options);
+        return;
+    }
+
+    if (payload.action === 'revert-started') {
+        router.patch('/admin/operations/daily/revert-started', basePayload, options);
+        return;
+    }
+
+    if (payload.action === 'revert-completed') {
+        router.patch('/admin/operations/daily/revert-completed', basePayload, options);
+        return;
+    }
+
+    if (payload.action === 'revert-cancellation') {
+        router.patch('/admin/operations/daily/revert-cancellation', basePayload, options);
     }
 }
 

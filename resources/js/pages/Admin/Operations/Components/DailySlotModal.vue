@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowRightLeft, Ban, CheckCircle2, Play, X } from 'lucide-vue-next';
+import { ArrowRightLeft, Ban, CheckCircle2, Play, RotateCcw, X } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 import type { DailySlot, DailySlotStatus, DailySlotType, Room, SlotAction, SlotActionPayload, YearLevel } from './type';
 
@@ -311,6 +311,7 @@ const actionError = computed(() => {
         ?? props.errors?.end_time
         ?? props.errors?.schedule_id
         ?? props.errors?.exception_id
+        ?? props.errors?.usage_log_id
         ?? '';
 });
 
@@ -455,11 +456,38 @@ function applyAction() {
                     <button
                         v-if="slot.source !== 'override' && slot.status === 'ongoing'"
                         type="button"
+                        @click="openAction('revert-started')"
+                        class="inline-flex items-center gap-2 rounded-lg border border-pup-maroon/20 px-3 py-2 text-sm font-semibold text-pup-maroon transition hover:bg-pup-maroon-pale"
+                    >
+                        <RotateCcw class="h-4 w-4" />
+                        Revert Start
+                    </button>
+                    <button
+                        v-if="slot.source !== 'override' && slot.status === 'ongoing'"
+                        type="button"
                         @click="openAction('complete')"
                         class="inline-flex items-center gap-2 rounded-lg bg-pup-maroon px-3 py-2 text-sm font-semibold text-white transition hover:bg-pup-maroon-deep"
                     >
                         <CheckCircle2 class="h-4 w-4" />
                         Complete
+                    </button>
+                    <button
+                        v-if="slot.source !== 'override' && slot.status === 'completed'"
+                        type="button"
+                        @click="openAction('revert-completed')"
+                        class="inline-flex items-center gap-2 rounded-lg border border-pup-maroon/20 px-3 py-2 text-sm font-semibold text-pup-maroon transition hover:bg-pup-maroon-pale"
+                    >
+                        <RotateCcw class="h-4 w-4" />
+                        Reopen as Ongoing
+                    </button>
+                    <button
+                        v-if="slot.source !== 'override' && slot.status === 'cancelled'"
+                        type="button"
+                        @click="openAction('revert-cancellation')"
+                        class="inline-flex items-center gap-2 rounded-lg border border-pup-maroon/20 px-3 py-2 text-sm font-semibold text-pup-maroon transition hover:bg-pup-maroon-pale"
+                    >
+                        <RotateCcw class="h-4 w-4" />
+                        Restore Class
                     </button>
                 </div>
 
@@ -469,9 +497,23 @@ function applyAction() {
                         <template v-if="activeAction === 'change-room'">Change room for this date?</template>
                         <template v-if="activeAction === 'start'">Mark this class as started?</template>
                         <template v-if="activeAction === 'complete'">Mark this class as completed?</template>
+                        <template v-if="activeAction === 'revert-started'">Revert this class start?</template>
+                        <template v-if="activeAction === 'revert-completed'">Reopen this completed class?</template>
+                        <template v-if="activeAction === 'revert-cancellation'">Restore this cancelled class?</template>
                     </h4>
                     <p class="mt-1 text-sm text-gray-500">
-                        This action will update the Daily Operations records and refresh the board.
+                        <template v-if="activeAction === 'revert-started'">
+                            This clears the actual start/end times in the room usage log and moves the class back to awaiting claim.
+                        </template>
+                        <template v-else-if="activeAction === 'revert-completed'">
+                            This clears the actual end time in the room usage log and moves the class back to occupied/ongoing.
+                        </template>
+                        <template v-else-if="activeAction === 'revert-cancellation'">
+                            This restores the class for the selected date and resets the cancelled usage log entry.
+                        </template>
+                        <template v-else>
+                            This action will update the Daily Operations records and refresh the board.
+                        </template>
                     </p>
 
                     <div v-if="actionError" class="mt-4 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-700">

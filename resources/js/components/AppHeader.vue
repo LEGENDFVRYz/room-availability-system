@@ -42,7 +42,7 @@ const adminNavItems: NavItem[] = [
     { title: 'Operations', href: '/admin/operations/', icon: Activity },
     { title: 'Schedules', href: '/admin/schedules/', icon: CalendarDays },
     { title: 'Manages', href: '/admin/manage/', icon: Settings2 },
-    { title: 'Records', href: '#', icon: ClipboardList },
+    { title: 'Records', href: '/admin/records/', icon: ClipboardList },
 ];
 
 const kioskNavItems: NavItem[] = [

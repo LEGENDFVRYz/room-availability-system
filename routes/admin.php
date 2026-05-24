@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\ManageController;
 use App\Http\Controllers\Admin\OperationController;
 use App\Http\Controllers\Admin\ScheduleController;
 use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
 
 
 /*
@@ -62,4 +63,16 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified'])->group(
     Route::patch('/operations/room-status/{roomOverride}',       [OperationController::class, 'updateRoomOverride'])->name('operations.room-status.update');
     Route::patch('/operations/room-status/{roomOverride}/clear', [OperationController::class, 'clearRoomOverride'])->name('operations.room-status.clear');
     
+    # Records 
+    Route::redirect('/records', '/admin/records/usage')->name('records');
+
+    # Records - Room Usage Logs
+    Route::get('/records/usage', function () {
+        return Inertia::render('Admin/Records/UsageLog');
+    })->name('records.usage');
+
+    # Records - (Admin) Activity Logs
+    Route::get('/records/activity', function () {
+        return Inertia::render('Admin/Records/ActivityLog');
+    })->name('records.activity');
 });

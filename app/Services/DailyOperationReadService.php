@@ -37,7 +37,7 @@ class DailyOperationReadService
         $selectedDate = $date->toDateString();
         $dayStart = $date->copy()->startOfDay();
         $dayEnd = $date->copy()->endOfDay();
-        $operationTerm = $this->academicTermService->resolveForDate($date);
+        $operationTerm = $this->academicTermService->getCurrentOrActive($date);
 
         $roomsBaseQuery = Room::query()
             ->select('id', 'code', 'name', 'room_type', 'floor', 'capacity', 'display_order', 'is_active')
@@ -259,13 +259,209 @@ class DailyOperationReadService
             ])
             ->values();
 
-        return [
+        $payload = [
             'rooms'                => $rooms,
             'daily_schedules'      => $dailySchedules,
             'selected_date'        => $selectedDate,
             'operation_term_id'    => $operationTerm?->id,
             'claim_grace_minutes'  => $this->dailyOperationService->claimGraceMinutes(),
         ];
+
+        $payload['room_stats'] = $this->roomStatsFromPayload($payload);
+
+        return $payload;
+    }
+
+    public function roomStatsFromPayload(array $payload): array
+    {
+        $rooms = collect($payload['rooms'] ?? []);
+        $dailySchedules = collect($payload['daily_schedules'] ?? []);
+        $selectedDate = (string) ($payload['selected_date'] ?? now()->toDateString());
+        $claimGraceMinutes = max(1, (int) ($payload['claim_grace_minutes'] ?? $this->dailyOperationService->claimGraceMinutes()));
+
+        $activeRoomIds = $rooms
+            ->filter(fn (array $room) => (bool) ($room['is_active'] ?? false))
+            ->pluck('id')
+            ->filter()
+            ->map(fn ($roomId) => (int) $roomId)
+            ->unique()
+            ->values();
+
+        $occupiedRoomIds = collect();
+        $claimableRoomIds = collect();
+        $currentOverrideRoomIds = collect();
+
+        foreach ($dailySchedules as $item) {
+            if (! is_array($item) || empty($item['room_id'])) {
+                continue;
+            }
+
+            $roomId = (int) $item['room_id'];
+            $source = (string) ($item['source'] ?? '');
+            $status = (string) ($item['status'] ?? '');
+            $eventType = (string) ($item['event_type'] ?? '');
+
+            if ($source === 'override') {
+                if ($this->itemIsCurrent($item, $selectedDate)) {
+                    $currentOverrideRoomIds->push($roomId);
+                }
+
+                continue;
+            }
+
+            if ($eventType === 'cancellation' || in_array($status, ['cancelled', 'auto_cancelled', 'completed'], true)) {
+                continue;
+            }
+
+            if (in_array($status, ['ongoing', 'occupied'], true)) {
+                $occupiedRoomIds->push($roomId);
+                continue;
+            }
+
+            if ($this->itemIsClaimableNow($item, $selectedDate, $claimGraceMinutes)) {
+                $claimableRoomIds->push($roomId);
+            }
+        }
+
+        $occupiedRoomIds = $occupiedRoomIds->unique()->values();
+        $claimableRoomIds = $claimableRoomIds
+            ->unique()
+            ->reject(fn (int $roomId) => $occupiedRoomIds->contains($roomId))
+            ->values();
+        $currentOverrideRoomIds = $currentOverrideRoomIds->unique()->values();
+
+        $blockedRoomIds = $occupiedRoomIds
+            ->merge($claimableRoomIds)
+            ->merge($currentOverrideRoomIds)
+            ->unique()
+            ->values();
+
+        $riskOrExceptionCount = $dailySchedules
+            ->filter(fn (array $item) => in_array((string) ($item['source'] ?? ''), ['exception', 'override'], true))
+            ->count();
+
+        return [
+            'available'   => max(0, $activeRoomIds->count() - $blockedRoomIds->count()),
+            'occupied'    => $occupiedRoomIds->count(),
+            'reserved'    => $claimableRoomIds->count(),
+            'maintenance' => $riskOrExceptionCount,
+        ];
+    }
+
+    private function itemIsCurrent(array $item, string $selectedDate): bool
+    {
+        if (! $this->selectedDateIsToday($selectedDate)) {
+            return false;
+        }
+
+        $start = $this->dateTimeForItemTime($selectedDate, $item['start_time'] ?? null);
+        $end = $this->dateTimeForItemTime($selectedDate, $item['end_time'] ?? null, endOfDayFallback: true);
+
+        if (! $start || ! $end || $start->greaterThanOrEqualTo($end)) {
+            return false;
+        }
+
+        $now = now();
+
+        return $now->greaterThanOrEqualTo($start) && $now->lessThan($end);
+    }
+
+    private function itemIsClaimableNow(array $item, string $selectedDate, int $claimGraceMinutes): bool
+    {
+        if (! $this->selectedDateIsToday($selectedDate)) {
+            return false;
+        }
+
+        $status = (string) ($item['status'] ?? '');
+
+        if (! in_array($status, ['scheduled', 'pending', 'reserved'], true)) {
+            return false;
+        }
+
+        $start = $this->dateTimeForItemTime($selectedDate, $item['start_time'] ?? null);
+        $end = $this->dateTimeForItemTime($selectedDate, $item['end_time'] ?? null, endOfDayFallback: true);
+
+        if (! $start || ! $end || $start->greaterThanOrEqualTo($end)) {
+            return false;
+        }
+
+        $claimDeadline = $this->dateTimeValue($item['auto_cancel_at'] ?? null)
+            ?? $start->copy()->addMinutes($claimGraceMinutes);
+
+        if ($claimDeadline->greaterThan($end)) {
+            $claimDeadline = $end;
+        }
+
+        $now = now();
+
+        return $now->greaterThanOrEqualTo($start) && $now->lessThan($claimDeadline);
+    }
+
+    private function selectedDateIsToday(string $selectedDate): bool
+    {
+        try {
+            return Carbon::parse($selectedDate)->isSameDay(now());
+        } catch (\Throwable) {
+            return true;
+        }
+    }
+
+    private function dateTimeForItemTime(string $selectedDate, mixed $time, bool $endOfDayFallback = false): ?Carbon
+    {
+        $minutes = $this->minutes($time);
+
+        if ($minutes === null) {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($selectedDate)
+                ->startOfDay()
+                ->addMinutes($minutes === 0 && $endOfDayFallback ? 1440 : $minutes);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function dateTimeValue(mixed $value): ?Carbon
+    {
+        if (! $value) {
+            return null;
+        }
+
+        if ($value instanceof Carbon) {
+            return $value;
+        }
+
+        try {
+            return Carbon::parse((string) $value);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function minutes(mixed $time): ?int
+    {
+        if ($time === null) {
+            return null;
+        }
+
+        if ($time instanceof Carbon) {
+            return ($time->hour * 60) + $time->minute;
+        }
+
+        if (! preg_match('/^(\d{1,2}):(\d{2})/', (string) $time, $matches)) {
+            return null;
+        }
+
+        $hour = (int) $matches[1];
+        $minute = (int) $matches[2];
+
+        if ($hour < 0 || $hour > 23 || $minute < 0 || $minute > 59) {
+            return null;
+        }
+
+        return ($hour * 60) + $minute;
     }
 
     private function scheduleExceptionsForDate(string $selectedDate, int $academicTermId): Collection

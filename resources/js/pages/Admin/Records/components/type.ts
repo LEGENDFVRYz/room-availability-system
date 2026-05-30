@@ -41,3 +41,39 @@ export interface RoomUsageFiltersState {
     room_ids: number[];
     borrow_type: 'all' | BorrowType;
 }
+
+export type ActivityCategory =
+    | 'daily_exception'
+    | 'room_override'
+    | 'cancellation'
+    | 'room_change'
+    | 'class_request'
+    | 'revert_action'
+    | 'system'
+    | string;
+
+export interface ActivityLogItem {
+    id: number | string;
+    created_at: string;
+    admin_name?: string | null;
+    user_name?: string | null;
+    action: string;
+    category?: ActivityCategory | null;
+    entity_type?: string | null;
+    entity_id?: number | string | null;
+    room_id?: number | null;
+    room_code?: string | null;
+    title?: string | null;
+    description: string;
+    details?: string | null;
+    metadata?: Record<string, unknown> | null;
+    ip_address?: string | null;
+}
+
+export interface ActivityLogFiltersState {
+    search: string;
+    date_from: string;
+    date_to: string;
+    room_ids: number[];
+    category: 'all' | ActivityCategory;
+}

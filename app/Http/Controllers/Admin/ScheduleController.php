@@ -20,7 +20,7 @@ class ScheduleController extends Controller
         private readonly ScheduleService $scheduleService,
     ) {}
 
-    // ── Shared helpers ────────────────────────────────────────────────────────
+    // Shared helpers 
     private function activeRooms(): \Illuminate\Support\Collection
     {
         return Room::where('is_active', true)
@@ -34,8 +34,7 @@ class ScheduleController extends Controller
             ]);
     }
 
-    // ── Pages ─────────────────────────────────────────────────────────────────
-
+    // Pages 
     public function sections(): Response
     {
         $term = $this->academicTermService->getCurrent();
@@ -56,8 +55,7 @@ class ScheduleController extends Controller
         ]);
     }
 
-    // ── CRUD ──────────────────────────────────────────────────────────────────
-
+    // CRUD Operations
     public function store(ScheduleRequest $request): RedirectResponse
     {
         $term = $this->academicTermService->getCurrent();

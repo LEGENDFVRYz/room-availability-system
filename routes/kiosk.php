@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\FloorStatusController;
 use App\Http\Controllers\Kiosk\DashboardController;
 use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
 
 
 /*
@@ -17,7 +18,11 @@ Route::prefix('kiosk')->name('kiosk.')->group(function () {
     # Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('index');
 
-    # DASHBOARD - API
-    Route::get('/dashboard/floor-status', [FloorStatusController::class, 'index'])
-    ->name('dashboard.floor-status');
+    # DASHBOARD - API (temporary)
+    Route::get('/dashboard/floor-status', [FloorStatusController::class, 'index'])->name('dashboard.floor-status');
+
+    # Annoucements
+    Route::get('/announcements', function () {
+        return Inertia::render('Kiosk/announcement/index');
+    })->name('announcements');
 });

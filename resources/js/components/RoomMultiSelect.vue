@@ -79,13 +79,13 @@ onBeforeUnmount(() => document.removeEventListener('click', closeWhenClickedOuts
 </script>
 
 <template>
-    <div ref="root" class="relative flex flex-col gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+    <div ref="root" class="relative flex w-full min-w-0 flex-col gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
         <span>{{ label }}</span>
 
         <button
             type="button"
             @click.stop="isOpen = !isOpen"
-            class="flex items-center justify-between border border-gray-200 bg-white px-3 text-left text-sm font-medium normal-case tracking-normal text-gray-700 shadow-sm transition hover:border-pup-maroon/40 focus:border-pup-maroon focus:outline-none focus:ring-2 focus:ring-pup-maroon/15"
+            class="flex w-full min-w-0 items-center justify-between border border-gray-200 bg-white px-3 text-left text-sm font-medium normal-case tracking-normal text-gray-700 shadow-sm transition hover:border-pup-maroon/40 focus:border-pup-maroon focus:outline-none focus:ring-2 focus:ring-pup-maroon/15"
             :class="buttonSizeClass"
         >
             <span class="truncate">{{ selectedRoomLabel }}</span>
@@ -94,7 +94,7 @@ onBeforeUnmount(() => document.removeEventListener('click', closeWhenClickedOuts
 
         <div
             v-if="isOpen"
-            class="absolute left-1/2 top-full z-[90] mt-2 w-[min(24rem,calc(100vw-2rem))] min-w-full -translate-x-1/2 overflow-hidden rounded-xl border border-pup-maroon/15 bg-white text-left shadow-2xl ring-1 ring-black/5"
+            class="absolute left-0 right-0 top-full z-[90] mt-2 w-full overflow-hidden rounded-xl border border-pup-maroon/15 bg-white text-left shadow-2xl ring-1 ring-black/5"
             @click.stop
         >
             <div class="flex items-center justify-between gap-3 border-b border-gray-100 px-3 py-2">

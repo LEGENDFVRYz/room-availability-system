@@ -48,7 +48,7 @@ const adminNavItems: NavItem[] = [
 const kioskNavItems: NavItem[] = [
     { title: 'Dashboard', href: '/kiosk/dashboard/', icon: LayoutDashboard },
     { title: 'Schedules', href: '/kiosk/schedules/', icon: CalendarDays },
-    { title: 'Announcements', href: '/kiosk/schedules/', icon: Megaphone },
+    { title: 'Announcements', href: '/kiosk/announcements/', icon: Megaphone },
 ];
 
 const navItems = computed<NavItem[]>(() => {
@@ -177,7 +177,7 @@ const dashboardLink = computed(() => {
                             </Avatar>
                         </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" class="w-56">
+                    <DropdownMenuContent align="end" class="w-56 mt-5 ">
                         <UserMenuContent :user="auth.user" />
                     </DropdownMenuContent>
                 </DropdownMenu>

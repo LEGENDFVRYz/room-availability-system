@@ -212,9 +212,9 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 12,
     },
     {
-        id: 'CEA301',
-        category: 'valid',
-        label: ['LECTURE', 'ROOM', '301'],
+        id: 'cpe_lab',
+        category: 'office',
+        label: ['CpE DEPT', 'LABORATORY', '301'],
         shape: 'rect',
         x: 1480,
         y: 255,
@@ -222,8 +222,8 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         h: 95,
         fs: 10,
     },
-{
-        id: 'CEA317',
+    {
+        id: 'CEA300',
         category: 'valid',
         label: ['MICROCOMPUTER', 'LABORATORY', '317'],
         shape: 'polygon',

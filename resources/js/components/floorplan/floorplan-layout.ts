@@ -20,7 +20,7 @@ export const floorplanCanvas = {
 
 export const floorplanRooms: FloorplanRoomLayout[] = [
     {
-        id: 'ece_lab_306b',
+        id: 'CEA306B',
         category: 'valid',
         label: ['ECE', 'LAB.', '306B'],
         shape: 'rect',
@@ -31,7 +31,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 12,
     },
     {
-        id: 'electronic_workshop_lab_306a',
+        id: 'CEA306A',
         category: 'valid',
         label: ['ELECTRONIC', 'WORKSHOP', 'LABORATORY', '306A'],
         shape: 'rect',
@@ -42,7 +42,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 12,
     },
     {
-        id: 'ece_research_development_305b',
+        id: 'CEA305B',
         category: 'valid',
         label: ['ECE', 'RESEARCH', 'AND', 'DEVELOPMENT', 'UNIT', '305B'],
         shape: 'rect',
@@ -53,7 +53,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 9,
     },
     {
-        id: 'electronics_fundamental_lab_1_305a',
+        id: 'CEA305A',
         category: 'valid',
         label: ['ELECTRONICS', 'FUNDAMENTAL', 'LAB-1', '305A'],
         shape: 'rect',
@@ -64,7 +64,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 12,
     },
     {
-        id: 'ece_students_society_304b',
+        id: 'CEA304B',
         category: 'valid',
         label: ['ECE', "STUDENT'S", 'SOCIETY', '304B'],
         shape: 'rect',
@@ -75,7 +75,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 9,
     },
     {
-        id: 'electronics_fundamental_lab_2_304a',
+        id: 'CEA304A',
         category: 'valid',
         label: ['ELECTRONICS', 'FUNDAMENTAL', 'LAB-2', '304A'],
         shape: 'rect',
@@ -86,7 +86,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 12,
     },
     {
-        id: 'pup_help_assist_mobilize_303b',
+        id: 'CEA303B',
         category: 'valid',
         label: ['PUP', 'HELP', 'ASSIST', 'AND', 'MOBILIZE', '303B'],
         shape: 'rect',
@@ -97,7 +97,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 9,
     },
     {
-        id: 'tv_radio_communication_lab_303a',
+        id: 'CEA303A',
         category: 'valid',
         label: ['TV AND', 'RADIO', 'COMMUNICATION', 'LABORATORY', '303A'],
         shape: 'rect',
@@ -108,7 +108,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 12,
     },
     {
-        id: 'computer_control_lab_302',
+        id: 'CEA302',
         category: 'valid',
         label: ['COMPUTER', 'CONTROL', 'LABORATORY', '302'],
         shape: 'rect',
@@ -119,7 +119,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 11,
     },
     {
-        id: 'lecture_room_307',
+        id: 'CEA307',
         category: 'valid',
         label: ['LECTURE ROOM', '307'],
         shape: 'rect',
@@ -130,7 +130,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 12,
     },
     {
-        id: 'automatic_control_lab_308',
+        id: 'CEA308',
         category: 'valid',
         label: ['AUTOMATIC', 'CONTROL', 'LABORATORY', '308'],
         shape: 'polygon',
@@ -188,7 +188,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 14,
     },
     {
-        id: 'coe_dept_office',
+        id: 'cpe_dept_office',
         category: 'office',
         label: ['CoE DEPT.', 'OFFICE'],
         shape: 'rect',
@@ -199,7 +199,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 14,
     },
     {
-        id: 'electronics_workshop_318',
+        id: 'CEA318',
         category: 'valid',
         label: ['ELECTRONICS', 'WORKSHOP', '318'],
         shape: 'rect',
@@ -212,7 +212,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 12,
     },
     {
-        id: 'lecture_room_301',
+        id: 'CEA301',
         category: 'valid',
         label: ['LECTURE', 'ROOM', '301'],
         shape: 'rect',
@@ -223,7 +223,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 10,
     },
 {
-        id: 'microcomputer_lab_317',
+        id: 'CEA317',
         category: 'valid',
         label: ['MICROCOMPUTER', 'LABORATORY', '317'],
         shape: 'polygon',
@@ -235,7 +235,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 11,
     },
     {
-        id: 'personal_computer_lab_1_310',
+        id: 'CEA310',
         category: 'valid',
         label: ['PERSONAL', 'COMPUTER', 'LAB-1', '310'],
         shape: 'rect',
@@ -246,7 +246,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 12,
     },
     {
-        id: 'personal_computer_lab_2_311',
+        id: 'CEA311',
         category: 'valid',
         label: ['PERSONAL', 'COMPUTER', 'LAB-2', '311'],
         shape: 'rect',
@@ -257,7 +257,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 12,
     },
     {
-        id: 'personal_computer_lab_3_312',
+        id: 'CEA312',
         category: 'valid',
         label: ['PERSONAL', 'COMPUTER', 'LAB-3', '312'],
         shape: 'rect',
@@ -268,7 +268,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 12,
     },
     {
-        id: 'personal_computer_lab_4_313',
+        id: 'CEA313',
         category: 'valid',
         label: ['PERSONAL', 'COMPUTER', 'LAB-4', '313'],
         shape: 'rect',
@@ -279,7 +279,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 12,
     },
     {
-        id: 'personal_computer_lab_5_314',
+        id: 'CEA314',
         category: 'valid',
         label: ['PERSONAL', 'COMPUTER', 'LAB-5', '314'],
         shape: 'rect',
@@ -290,7 +290,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 12,
     },
     {
-        id: 'personal_computer_lab_6_315',
+        id: 'CEA315',
         category: 'valid',
         label: ['PERSONAL', 'COMPUTER', 'LAB-6', '315'],
         shape: 'rect',
@@ -301,7 +301,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 12,
     },
     {
-        id: 'digital_circuit_lab_316',
+        id: 'CEA316',
         category: 'valid',
         label: ['DIGITAL', 'CIRCUIT', 'LABORATORY', '316'],
         shape: 'rect',

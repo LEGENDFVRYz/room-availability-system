@@ -107,6 +107,9 @@ export interface FloorplanTheme {
     statusReservedStroke: string;
     statusMaintenanceFill: string;
     statusMaintenanceStroke: string;
+    statusInactiveFill: string;
+    statusInactiveStroke: string;
+    statusInactiveLabelColor: string;
     statusUnknownFill: string;
     statusUnknownStroke: string;
 }

@@ -33,7 +33,7 @@ const props = withDefaults(defineProps<Props>(), {
     initialRooms: () => [],
     apiUrl: '/api/dashboard/floor-status',
     pollIntervalMs: 30000,
-    colorMode: 'category',
+    colorMode: 'status',
     theme: () => ({}),
     showPanel: true,
     showLegend: true,
@@ -81,12 +81,13 @@ function getRoomTitle(layoutRoom: FloorplanRoomLayout | null | undefined): strin
 
 function getRoomData(roomId: string): FloorplanRoomStatus {
     const layoutRoom = floorplanRooms.find((room) => room.id === roomId);
+    const fallbackStatus = layoutRoom?.category === 'office' ? 'fixed_office' : 'inactive';
 
     return (
         roomStatusMap.value[roomId] ?? {
             room_id: roomId,
             label: layoutRoom ? getRoomTitle(layoutRoom) : roomId,
-            status: 'unknown',
+            status: fallbackStatus,
             subject: null,
             section: null,
             teacher: null,
@@ -94,44 +95,86 @@ function getRoomData(roomId: string): FloorplanRoomStatus {
     );
 }
 
-function roomBaseFill(room: FloorplanRoomLayout): string {
-    if (props.colorMode === 'status') {
-        const status = getRoomData(room.id).status ?? 'unknown';
-        const key = `status${toPascalCase(status)}Fill`;
+function getRoomStatus(roomId: string): string {
+    return getRoomData(roomId).status ?? 'inactive';
+}
 
-        return mapTheme.value[key] ?? mapTheme.value.statusUnknownFill;
+function statusThemeValue(status: string, token: 'Fill' | 'Stroke'): string {
+    const key = `status${toPascalCase(status)}${token}`;
+    const fallbackKey = `statusUnknown${token}`;
+
+    return mapTheme.value[key] ?? mapTheme.value[fallbackKey];
+}
+
+function isInactiveRoom(room: FloorplanRoomLayout): boolean {
+    return props.colorMode === 'status' && room.category === 'valid' && getRoomStatus(room.id) === 'inactive';
+}
+
+function isFixedOffice(room: FloorplanRoomLayout): boolean {
+    return room.category === 'office';
+}
+
+function isRoomClickable(room: FloorplanRoomLayout): boolean {
+    if (isFixedOffice(room)) return false;
+    if (props.colorMode === 'status') return !isInactiveRoom(room);
+
+    return true;
+}
+
+function setHoveredRoom(room: FloorplanRoomLayout): void {
+    if (!isRoomClickable(room)) return;
+
+    hoveredRoomId.value = room.id;
+}
+
+function clearHoveredRoom(room?: FloorplanRoomLayout): void {
+    if (!room || hoveredRoomId.value === room.id) hoveredRoomId.value = null;
+}
+
+function roomBaseFill(room: FloorplanRoomLayout): string {
+    if (isFixedOffice(room)) return mapTheme.value.officeFill;
+
+    if (props.colorMode === 'status') {
+        return statusThemeValue(getRoomStatus(room.id), 'Fill');
     }
 
-    return room.category === 'office' ? mapTheme.value.officeFill : mapTheme.value.validRoomFill;
+    return mapTheme.value.validRoomFill;
 }
 
 function roomBaseStroke(room: FloorplanRoomLayout): string {
-    if (props.colorMode === 'status') {
-        const status = getRoomData(room.id).status ?? 'unknown';
-        const key = `status${toPascalCase(status)}Stroke`;
+    if (isFixedOffice(room)) return mapTheme.value.officeStroke;
 
-        return mapTheme.value[key] ?? mapTheme.value.statusUnknownStroke;
+    if (props.colorMode === 'status') {
+        return statusThemeValue(getRoomStatus(room.id), 'Stroke');
     }
 
-    return room.category === 'office' ? mapTheme.value.officeStroke : mapTheme.value.validRoomStroke;
+    return mapTheme.value.validRoomStroke;
 }
 
 function roomStroke(room: FloorplanRoomLayout): string {
-    if (selectedRoomId.value === room.id) return mapTheme.value.selectedStroke;
-    if (hoveredRoomId.value === room.id) return mapTheme.value.hoverStroke;
+    if (isRoomClickable(room) && selectedRoomId.value === room.id) return mapTheme.value.selectedStroke;
+    if (isRoomClickable(room) && hoveredRoomId.value === room.id) return mapTheme.value.hoverStroke;
 
     return roomBaseStroke(room);
 }
 
 function roomStrokeWidth(room: FloorplanRoomLayout): number {
-    if (selectedRoomId.value === room.id) return 4;
-    if (hoveredRoomId.value === room.id) return 3.2;
+    if (isRoomClickable(room) && selectedRoomId.value === room.id) return 4;
+    if (isRoomClickable(room) && hoveredRoomId.value === room.id) return 3.2;
 
     return 2.2;
 }
 
 function roomOpacity(room: FloorplanRoomLayout): number {
+    if (!isRoomClickable(room)) return 1;
+
     return hoveredRoomId.value === room.id ? 0.92 : 1;
+}
+
+function roomLabelColor(room: FloorplanRoomLayout): string {
+    if (isInactiveRoom(room)) return mapTheme.value.statusInactiveLabelColor;
+
+    return mapTheme.value.labelColor;
 }
 
 function toPascalCase(value: unknown): string {
@@ -164,12 +207,14 @@ function stairLines(stair: FloorplanStair): number[] {
     return Array.from({ length: stair.lines ?? 11 }, (_, index) => index);
 }
 
-function selectRoom(roomId: string): void {
-    selectedRoomId.value = roomId;
+function selectRoom(room: FloorplanRoomLayout): void {
+    if (!isRoomClickable(room)) return;
+
+    selectedRoomId.value = room.id;
 }
 
 function formatStatus(status: unknown): string {
-    return String(status ?? 'unknown').replaceAll('_', ' ');
+    return String(status ?? 'inactive').replaceAll('_', ' ');
 }
 
 async function refreshStatuses(): Promise<void> {
@@ -182,13 +227,20 @@ async function refreshStatuses(): Promise<void> {
 
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-        liveRooms.value = (await response.json()) as FloorplanRoomStatus[];
+        const payload = await response.json();
+        liveRooms.value = Array.isArray(payload)
+            ? payload as FloorplanRoomStatus[]
+            : Array.isArray(payload?.data)
+                ? payload.data as FloorplanRoomStatus[]
+                : [];
     } catch (error) {
         console.error('Failed to fetch floor status:', error);
     }
 }
 
 onMounted(() => {
+    void refreshStatuses();
+
     if (props.pollIntervalMs > 0) {
         poller = window.setInterval(refreshStatuses, props.pollIntervalMs);
     }
@@ -488,17 +540,17 @@ onUnmounted(() => {
                     <g
                         v-for="room in floorplanRooms"
                         :key="room.id"
-                        class="cursor-pointer outline-none"
-                        tabindex="0"
-                        role="button"
+                        :class="isRoomClickable(room) ? 'cursor-pointer outline-none' : 'cursor-default outline-none'"
+                        :tabindex="isRoomClickable(room) ? 0 : -1"
+                        :role="isRoomClickable(room) ? 'button' : 'img'"
                         :aria-label="`${getRoomData(room.id).label ?? getRoomTitle(room)} - ${formatStatus(getRoomData(room.id).status)}`"
-                        @mouseenter="hoveredRoomId = room.id"
-                        @mouseleave="hoveredRoomId = null"
-                        @focus="hoveredRoomId = room.id"
-                        @blur="hoveredRoomId = null"
-                        @click="selectRoom(room.id)"
-                        @keydown.enter.prevent="selectRoom(room.id)"
-                        @keydown.space.prevent="selectRoom(room.id)"
+                        @mouseenter="setHoveredRoom(room)"
+                        @mouseleave="clearHoveredRoom(room)"
+                        @focus="setHoveredRoom(room)"
+                        @blur="clearHoveredRoom(room)"
+                        @click="selectRoom(room)"
+                        @keydown.enter.prevent="selectRoom(room)"
+                        @keydown.space.prevent="selectRoom(room)"
                     >
                         <rect
                             v-if="room.shape === 'rect'"
@@ -535,7 +587,7 @@ onUnmounted(() => {
                             :y="labelStartY(room) + index * (room.fs + 3)"
                             text-anchor="middle"
                             class="pointer-events-none select-none font-sans font-bold"
-                            :fill="mapTheme.labelColor"
+                            :fill="roomLabelColor(room)"
                             :font-size="room.fs"
                         >
                             {{ line }}
@@ -551,41 +603,88 @@ onUnmounted(() => {
                 class="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-center text-sm"
                 :style="{ color: mapTheme.labelColor }"
             >
-                <span class="inline-flex items-center gap-2">
-                    <span
-                        class="h-4 w-4 rounded border"
-                        :style="{ backgroundColor: mapTheme.validRoomFill, borderColor: mapTheme.validRoomStroke }"
-                    />
-                    Valid rooms
-                </span>
-                <span class="inline-flex items-center gap-2">
-                    <span
-                        class="h-4 w-4 rounded border"
-                        :style="{ backgroundColor: mapTheme.officeFill, borderColor: mapTheme.officeStroke }"
-                    />
-                    Fixed offices
-                </span>
-                <span class="inline-flex items-center gap-2">
-                    <span
-                        class="h-4 w-4 rounded border"
-                        :style="{ backgroundColor: mapTheme.corridorFill, borderColor: mapTheme.corridorStroke }"
-                    />
-                    Corridors
-                </span>
-                <span class="inline-flex items-center gap-2">
-                    <span
-                        class="h-4 w-4 rounded border"
-                        :style="{ backgroundColor: mapTheme.toiletFill, borderColor: mapTheme.toiletStroke }"
-                    />
-                    Bathrooms
-                </span>
-                <span class="inline-flex items-center gap-2">
-                    <span
-                        class="h-4 w-4 rounded border"
-                        :style="{ backgroundColor: mapTheme.ignoredFill, borderColor: mapTheme.ignoredStroke }"
-                    />
-                    Stock / elevator
-                </span>
+                <template v-if="colorMode === 'status'">
+                    <span class="inline-flex items-center gap-2">
+                        <span
+                            class="h-4 w-4 rounded border"
+                            :style="{ backgroundColor: mapTheme.statusAvailableFill, borderColor: mapTheme.statusAvailableStroke }"
+                        />
+                        Available
+                    </span>
+                    <span class="inline-flex items-center gap-2">
+                        <span
+                            class="h-4 w-4 rounded border"
+                            :style="{ backgroundColor: mapTheme.statusOccupiedFill, borderColor: mapTheme.statusOccupiedStroke }"
+                        />
+                        Occupied
+                    </span>
+                    <span class="inline-flex items-center gap-2">
+                        <span
+                            class="h-4 w-4 rounded border"
+                            :style="{ backgroundColor: mapTheme.statusReservedFill, borderColor: mapTheme.statusReservedStroke }"
+                        />
+                        Reserved
+                    </span>
+                    <span class="inline-flex items-center gap-2">
+                        <span
+                            class="h-4 w-4 rounded border"
+                            :style="{ backgroundColor: mapTheme.statusMaintenanceFill, borderColor: mapTheme.statusMaintenanceStroke }"
+                        />
+                        Maintenance
+                    </span>
+                    <span class="inline-flex items-center gap-2">
+                        <span
+                            class="h-4 w-4 rounded border"
+                            :style="{ backgroundColor: mapTheme.statusInactiveFill, borderColor: mapTheme.statusInactiveStroke }"
+                        />
+                        Inactive / Not CPE-managed
+                    </span>
+                    <span class="inline-flex items-center gap-2">
+                        <span
+                            class="h-4 w-4 rounded border"
+                            :style="{ backgroundColor: mapTheme.officeFill, borderColor: mapTheme.officeStroke }"
+                        />
+                        Fixed offices
+                    </span>
+                </template>
+
+                <template v-else>
+                    <span class="inline-flex items-center gap-2">
+                        <span
+                            class="h-4 w-4 rounded border"
+                            :style="{ backgroundColor: mapTheme.validRoomFill, borderColor: mapTheme.validRoomStroke }"
+                        />
+                        Valid rooms
+                    </span>
+                    <span class="inline-flex items-center gap-2">
+                        <span
+                            class="h-4 w-4 rounded border"
+                            :style="{ backgroundColor: mapTheme.officeFill, borderColor: mapTheme.officeStroke }"
+                        />
+                        Fixed offices
+                    </span>
+                    <span class="inline-flex items-center gap-2">
+                        <span
+                            class="h-4 w-4 rounded border"
+                            :style="{ backgroundColor: mapTheme.corridorFill, borderColor: mapTheme.corridorStroke }"
+                        />
+                        Corridors
+                    </span>
+                    <span class="inline-flex items-center gap-2">
+                        <span
+                            class="h-4 w-4 rounded border"
+                            :style="{ backgroundColor: mapTheme.toiletFill, borderColor: mapTheme.toiletStroke }"
+                        />
+                        Bathrooms
+                    </span>
+                    <span class="inline-flex items-center gap-2">
+                        <span
+                            class="h-4 w-4 rounded border"
+                            :style="{ backgroundColor: mapTheme.ignoredFill, borderColor: mapTheme.ignoredStroke }"
+                        />
+                        Stock / elevator
+                    </span>
+                </template>
             </div>
         </section>
         

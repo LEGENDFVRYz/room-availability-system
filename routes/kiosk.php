@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\FloorStatusController;
 use App\Http\Controllers\Kiosk\DashboardController;
 use Illuminate\Support\Facades\Route;
 
@@ -15,4 +16,8 @@ Route::prefix('kiosk')->name('kiosk.')->group(function () {
     
     # Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('index');
+
+    # DASHBOARD - API
+    Route::get('/dashboard/floor-status', [FloorStatusController::class, 'index'])
+    ->name('dashboard.floor-status');
 });

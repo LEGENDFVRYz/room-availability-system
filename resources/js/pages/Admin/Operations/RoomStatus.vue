@@ -5,8 +5,8 @@ import RoomStatusClearModal from './Components/RoomStatusClearModal.vue';
 import RoomStatusViewModal from './Components/RoomStatusViewModal.vue';
 import type { BreadcrumbItem, PageHeader } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { Archive, Building2, CalendarClock, CalendarDays, CheckCircle2, ChevronDown, Clock, Eye, Plus, Power, Search, ShieldAlert, Wrench, School } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import { Archive, Building2, CalendarClock, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, Eye, Plus, Power, Search, ShieldAlert, Wrench, School } from 'lucide-vue-next';
+import { computed, ref, watch } from 'vue';
 
 // --- Page Types ---
 interface RoomOption {
@@ -143,6 +143,34 @@ const filteredOverrides = computed(() => {
         })
         .sort((a, b) => parseDate(a.starts_at).getTime() - parseDate(b.starts_at).getTime());
 });
+
+// --- Client-Side Pagination Logic ---
+const currentPage = ref(1);
+const itemsPerPage = 10;
+
+const totalPages = computed(() => Math.ceil(filteredOverrides.value.length / itemsPerPage));
+
+const paginatedOverrides = computed(() => {
+    const start = (currentPage.value - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    return filteredOverrides.value.slice(start, end);
+});
+
+// Reset to page 1 if the underlying filtered list changes
+watch(() => filteredOverrides.value.length, () => {
+    if (currentPage.value > totalPages.value) {
+        currentPage.value = Math.max(1, totalPages.value);
+    }
+});
+
+function prevPage() {
+    if (currentPage.value > 1) currentPage.value--;
+}
+
+function nextPage() {
+    if (currentPage.value < totalPages.value) currentPage.value++;
+}
+// ------------------------------------
 
 const summary = computed(() => {
     const active = props.overrides.filter((item) => overrideState(item) === 'active');
@@ -485,7 +513,7 @@ function clearOverride() {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100 bg-white text-sm">
-                            <tr v-for="item in filteredOverrides" :key="item.id" class="transition hover:bg-pup-off-white">
+                            <tr v-for="item in paginatedOverrides" :key="item.id" class="transition hover:bg-pup-off-white">
                                 <td class="px-5 py-4">
                                     <div class="font-mono text-xs font-semibold text-pup-maroon">{{ item.room_code }}</div>
                                     <div class="mt-1 max-w-[220px] truncate text-xs text-gray-500">{{ item.room_name }}</div>
@@ -541,6 +569,68 @@ function clearOverride() {
                         </tbody>
                     </table>
                 </div>
+
+                <div v-if="totalPages > 1" class="flex items-center justify-between border-t border-gray-100 bg-gray-50/50 px-5 py-4">
+                    
+                    <div class="flex flex-1 justify-between sm:hidden">
+                        <button
+                            @click="prevPage"
+                            :disabled="currentPage === 1"
+                            class="flex h-9 items-center justify-center rounded-lg border border-gray-200 bg-white px-4 text-xs font-semibold text-gray-600 transition-colors hover:border-pup-maroon hover:bg-pup-maroon-pale hover:text-pup-maroon disabled:pointer-events-none disabled:opacity-50 shadow-sm"
+                        >
+                            Previous
+                        </button>
+                        <button
+                            @click="nextPage"
+                            :disabled="currentPage === totalPages"
+                            class="flex h-9 items-center justify-center rounded-lg border border-gray-200 bg-white px-4 text-xs font-semibold text-gray-600 transition-colors hover:border-pup-maroon hover:bg-pup-maroon-pale hover:text-pup-maroon disabled:pointer-events-none disabled:opacity-50 shadow-sm"
+                        >
+                            Next
+                        </button>
+                    </div>
+
+                    <div class="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+                        <div>
+                            <p class="text-[11px] font-medium text-gray-500 uppercase tracking-wide">
+                                Showing
+                                <span class="font-bold text-gray-800">{{ (currentPage - 1) * itemsPerPage + 1 }}</span>
+                                to
+                                <span class="font-bold text-gray-800">{{ Math.min(currentPage * itemsPerPage, filteredOverrides.length) }}</span>
+                                of
+                                <span class="font-bold text-gray-800">{{ filteredOverrides.length }}</span>
+                                entries
+                            </p>
+                        </div>
+                        <div>
+                            <nav class="flex items-center gap-2" aria-label="Pagination">
+                                <button
+                                    @click="prevPage"
+                                    :disabled="currentPage === 1"
+                                    class="group flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-400 transition-all hover:border-pup-maroon hover:bg-pup-maroon-pale hover:text-pup-maroon hover:shadow-sm disabled:pointer-events-none disabled:opacity-40"
+                                >
+                                    <span class="sr-only">Previous</span>
+                                    <ChevronLeft class="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
+                                </button>
+
+                                <div class="flex h-8 items-center justify-center rounded-lg border border-gray-200 bg-white px-3.5 shadow-sm">
+                                    <span class="text-xs font-medium text-gray-500">
+                                        Page <span class="font-black text-pup-maroon">{{ currentPage }}</span> of {{ totalPages }}
+                                    </span>
+                                </div>
+
+                                <button
+                                    @click="nextPage"
+                                    :disabled="currentPage === totalPages"
+                                    class="group flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-400 transition-all hover:border-pup-maroon hover:bg-pup-maroon-pale hover:text-pup-maroon hover:shadow-sm disabled:pointer-events-none disabled:opacity-40"
+                                >
+                                    <span class="sr-only">Next</span>
+                                    <ChevronRight class="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                                </button>
+                            </nav>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
 

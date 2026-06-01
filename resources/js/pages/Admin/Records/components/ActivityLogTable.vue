@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ScrollText } from 'lucide-vue-next';
+import { ScrollText, ChevronLeft, ChevronRight } from 'lucide-vue-next';
+import { computed, ref, watch } from 'vue';
 import type { ActivityLogItem } from './type';
 
 const props = defineProps<{
@@ -25,6 +26,34 @@ const CATEGORY_BADGE: Record<string, string> = {
     revert_action: 'border border-gray-200 bg-gray-50 text-gray-600',
     system: 'bg-status-maintenance-bg text-status-maintenance',
 };
+
+// --- Client-Side Pagination Logic ---
+const currentPage = ref(1);
+const itemsPerPage = 10;
+
+const totalPages = computed(() => Math.ceil(props.logs.length / itemsPerPage));
+
+const paginatedLogs = computed(() => {
+    const start = (currentPage.value - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    return props.logs.slice(start, end);
+});
+
+// Reset to page 1 if the underlying logs data completely changes
+watch(() => props.logs.length, () => {
+    if (currentPage.value > totalPages.value) {
+        currentPage.value = Math.max(1, totalPages.value);
+    }
+});
+
+function prevPage() {
+    if (currentPage.value > 1) currentPage.value--;
+}
+
+function nextPage() {
+    if (currentPage.value < totalPages.value) currentPage.value++;
+}
+// ------------------------------------
 
 function formatDateTime(value: string): string {
     const date = new Date(value);
@@ -96,7 +125,7 @@ function titleCase(value: string): string {
                 </thead>
 
                 <tbody class="divide-y divide-gray-100 bg-white">
-                    <tr v-for="log in props.logs" :key="log.id" class="transition hover:bg-pup-maroon-pale/30">
+                    <tr v-for="log in paginatedLogs" :key="log.id" class="transition hover:bg-pup-maroon-pale/30">
                         <td class="whitespace-nowrap px-4 py-3 align-top font-semibold text-gray-700">
                             {{ formatDateTime(log.created_at) }}
                         </td>
@@ -146,6 +175,67 @@ function titleCase(value: string): string {
                     </tr>
                 </tbody>
             </table>
+        </div>
+
+        <div v-if="totalPages > 1" class="flex items-center justify-between border-t border-gray-100 bg-gray-50/50 px-5 py-4">
+            
+            <div class="flex flex-1 justify-between sm:hidden">
+                <button
+                    @click="prevPage"
+                    :disabled="currentPage === 1"
+                    class="flex h-9 items-center justify-center rounded-lg border border-gray-200 bg-white px-4 text-xs font-semibold text-gray-600 transition-colors hover:border-pup-maroon hover:bg-pup-maroon-pale hover:text-pup-maroon disabled:pointer-events-none disabled:opacity-50 shadow-sm"
+                >
+                    Previous
+                </button>
+                <button
+                    @click="nextPage"
+                    :disabled="currentPage === totalPages"
+                    class="flex h-9 items-center justify-center rounded-lg border border-gray-200 bg-white px-4 text-xs font-semibold text-gray-600 transition-colors hover:border-pup-maroon hover:bg-pup-maroon-pale hover:text-pup-maroon disabled:pointer-events-none disabled:opacity-50 shadow-sm"
+                >
+                    Next
+                </button>
+            </div>
+
+            <div class="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+                <div>
+                    <p class="text-[11px] font-medium text-gray-500 uppercase tracking-wide">
+                        Showing
+                        <span class="font-bold text-gray-800">{{ (currentPage - 1) * itemsPerPage + 1 }}</span>
+                        to
+                        <span class="font-bold text-gray-800">{{ Math.min(currentPage * itemsPerPage, props.logs.length) }}</span>
+                        of
+                        <span class="font-bold text-gray-800">{{ props.logs.length }}</span>
+                        entries
+                    </p>
+                </div>
+                <div>
+                    <nav class="flex items-center gap-2" aria-label="Pagination">
+                        <button
+                            @click="prevPage"
+                            :disabled="currentPage === 1"
+                            class="group flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-400 transition-all hover:border-pup-maroon hover:bg-pup-maroon-pale hover:text-pup-maroon hover:shadow-sm disabled:pointer-events-none disabled:opacity-40"
+                        >
+                            <span class="sr-only">Previous</span>
+                            <ChevronLeft class="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
+                        </button>
+
+                        <div class="flex h-8 items-center justify-center rounded-lg border border-gray-200 bg-white px-3.5 shadow-sm">
+                            <span class="text-xs font-medium text-gray-500">
+                                Page <span class="font-black text-pup-maroon">{{ currentPage }}</span> of {{ totalPages }}
+                            </span>
+                        </div>
+
+                        <button
+                            @click="nextPage"
+                            :disabled="currentPage === totalPages"
+                            class="group flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-400 transition-all hover:border-pup-maroon hover:bg-pup-maroon-pale hover:text-pup-maroon hover:shadow-sm disabled:pointer-events-none disabled:opacity-40"
+                        >
+                            <span class="sr-only">Next</span>
+                            <ChevronRight class="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                        </button>
+                    </nav>
+                </div>
+            </div>
         </div>
     </div>
 </template>

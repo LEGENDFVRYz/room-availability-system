@@ -35,6 +35,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified'])->group(
 
     # Schedules
     Route::redirect('/schedules', '/admin/schedules/sections')->name('schedules');
+    
     Route::get('/schedules/sections',             [ScheduleController::class, 'sections'])->name('schedules.sections');
     Route::get('/schedules/rooms',                [ScheduleController::class, 'rooms'])->name('schedules.rooms');
     Route::post('/schedules',                     [ScheduleController::class, 'store'])->name('schedules.store');
@@ -47,7 +48,13 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified'])->group(
     Route::redirect('/operations', '/admin/operations/daily')->name('operations');
 
     # Operations - Daily Schedule
-    Route::get('/operations/daily',         [OperationController::class, 'daily'])->name('operations.daily');
+    Route::get('/operations/daily',                                   [OperationController::class, 'daily'])->name('operations.daily');
+    Route::post('/operations/daily/request-class',                    [OperationController::class, 'requestClass'])->name('operations.daily.request-class');
+    Route::post('/operations/daily/cancel',                           [OperationController::class, 'cancelClass'])->name('operations.daily.cancel');
+    Route::post('/operations/daily/change-room',                      [OperationController::class, 'changeRoom'])->name('operations.daily.change-room');
+    Route::patch('/operations/daily/mark-started',                    [OperationController::class, 'markStarted'])->name('operations.daily.mark-started');
+    Route::patch('/operations/daily/mark-completed',                  [OperationController::class, 'markCompleted'])->name('operations.daily.mark-completed');
+    Route::delete('/operations/daily/exceptions/{scheduleException}', [OperationController::class, 'destroyException'])->name('operations.daily.exceptions.destroy');
 
     # Operations - Room Status
     Route::get('/operations/room-status',                        [OperationController::class, 'rooms'])->name('operations.room-status');

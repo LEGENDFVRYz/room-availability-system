@@ -8,7 +8,17 @@ defineProps<{
 </script>
 
 <template>
-    <AuthLayout :title="title" :description="description">
+    <div class="min-h-screen w-full bg-[#f9f3f3]">
         <slot />
-    </AuthLayout>
+    </div>
 </template>
+
+ 
+        <!-- LARGE WATERMARK
+        <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <img
+                src="/images/pup-logo.png"
+                alt="PUP Watermark"
+                class="w-[700px] opacity-[0.035] blur-[1px]"
+            />
+        </div> -->

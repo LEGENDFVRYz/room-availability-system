@@ -33,7 +33,7 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('dashboard', absolute: false));
+        return redirect()->intended('/admin/dashboard');
     }
 
     /**
@@ -45,6 +45,11 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
+
+        // Check if the frontend asked to be redirected to the kiosk
+        if ($request->input('redirect_to') === 'kiosk') {
+            return redirect('/kiosk'); // Replace '/kiosk' with your actual public schedule route
+        }
 
         return redirect('/');
     }

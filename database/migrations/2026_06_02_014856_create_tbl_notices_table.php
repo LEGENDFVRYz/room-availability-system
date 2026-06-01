@@ -18,7 +18,6 @@ return new class extends Migration
             $table->text('body');
 
             $table->string('type', 30)->default('general');
-            $table->string('design_variant', 20)->default('general');
 
             $table->string('source_type', 50)->nullable();
             $table->unsignedBigInteger('source_id')->nullable();
@@ -34,25 +33,17 @@ return new class extends Migration
             $table->boolean('is_pinned')->default(false);
             $table->boolean('is_active')->default(true);
 
-            $table->boolean('show_on_kiosk')->default(true);
-            $table->boolean('show_on_public_dashboard')->default(true);
-            $table->boolean('show_on_public_schedule')->default(false);
-
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
 
             $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
-
-            $table->dateTime('published_at')->nullable();
-
-            $table->foreignId('published_by')->nullable()->constrained('users')->nullOnDelete();
 
             $table->softDeletes();
             $table->timestamps();
 
             $table->index(['status', 'is_active', 'starts_at', 'ends_at'], 'idx_notice_visible');
             $table->index('type');
-            $table->index('design_variant');
             $table->index(['source_type', 'source_id']);
+            $table->index('room_id');
             $table->index('is_pinned');
         });
     }

@@ -19,7 +19,6 @@ class Notice extends Model
         'title',
         'body',
         'type',
-        'design_variant',
         'source_type',
         'source_id',
         'room_id',
@@ -29,25 +28,16 @@ class Notice extends Model
         'status',
         'is_pinned',
         'is_active',
-        'show_on_kiosk',
-        'show_on_public_dashboard',
-        'show_on_public_schedule',
         'created_by',
         'updated_by',
-        'published_at',
-        'published_by',
     ];
 
     protected $casts = [
         'metadata' => 'array',
         'starts_at' => 'datetime',
         'ends_at' => 'datetime',
-        'published_at' => 'datetime',
         'is_pinned' => 'boolean',
         'is_active' => 'boolean',
-        'show_on_kiosk' => 'boolean',
-        'show_on_public_dashboard' => 'boolean',
-        'show_on_public_schedule' => 'boolean',
     ];
 
     public function room(): BelongsTo
@@ -63,11 +53,6 @@ class Notice extends Model
     public function updatedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'updated_by');
-    }
-
-    public function publishedBy(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'published_by');
     }
 
     public function scopeActive(Builder $query): Builder
@@ -92,9 +77,13 @@ class Notice extends Model
             });
     }
 
-    public function scopeForKiosk(Builder $query): Builder
+    public function getDesignAttribute(): string
     {
-        return $query->where('show_on_kiosk', true);
+        return match ($this->source_type) {
+            'schedule_exception' => 'exception',
+            'room_override'      => 'override',
+            default              => 'general',
+        };
     }
 
     public function getTypeLabelAttribute(): string
@@ -116,18 +105,18 @@ class Notice extends Model
         $metadata = $this->metadata ?? [];
 
         return [
-            'id'        => $this->id,
-            'title'     => $this->title,
-            'body'      => $this->body,
-            'type'      => $this->type,
-            'typeLabel' => $this->type_label,
-            'design'    => $this->design_variant,
-            'room'      => $metadata['room_label'] ?? $this->room?->code,
-            'schedule'  => $metadata['schedule_label'] ?? null,
-            'postedAt'  => $this->published_at?->format('M d, Y g:i A')
-                ?? $this->created_at?->format('M d, Y g:i A'),
-            'expiresAt' => $this->ends_at?->format('M d, Y g:i A'),
-            'isPinned'  => $this->is_pinned,
+            'id'         => $this->id,
+            'title'      => $this->title,
+            'body'       => $this->body,
+            'type'       => $this->type,
+            'typeLabel'  => $this->type_label,
+            'sourceType' => $this->source_type,
+            'design'     => $this->design,
+            'room'       => $metadata['room_label'] ?? $this->room?->code,
+            'schedule'   => $metadata['schedule_label'] ?? null,
+            'postedAt'   => $this->created_at?->format('M d, Y g:i A'),
+            'expiresAt'  => $this->ends_at?->format('M d, Y g:i A'),
+            'isPinned'   => $this->is_pinned,
         ];
     }
 }

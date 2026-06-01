@@ -6,16 +6,12 @@ const props = defineProps<{
     logs: RoomUsageLogItem[];
 }>();
 
-const SOURCE_LABEL: Record<string, string> = {
-    schedule: 'Regular Schedule',
-    schedule_exception: 'Daily Operation',
-};
-
 const BORROW_TYPE_LABEL: Record<string, string> = {
     regular: 'Regular Class',
     room_change: 'Room Change',
     special_class: 'Special Class',
     makeup_class: 'Makeup Class',
+    daily_operation: 'Daily Operation',
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -23,9 +19,12 @@ const STATUS_LABEL: Record<string, string> = {
     completed: 'Completed',
 };
 
-const SOURCE_BADGE: Record<string, string> = {
-    schedule: 'bg-pup-gold-pale text-pup-maroon-deep',
-    schedule_exception: 'border border-pup-maroon/30 bg-white text-pup-maroon',
+const BORROW_TYPE_BADGE: Record<string, string> = {
+    regular: 'bg-pup-gold-pale text-pup-maroon-deep',
+    room_change: 'border border-pup-maroon/30 bg-white text-pup-maroon',
+    special_class: 'bg-status-notice-bg text-status-notice',
+    makeup_class: 'bg-status-warning-bg text-status-warning',
+    daily_operation: 'border border-pup-maroon/30 bg-white text-pup-maroon',
 };
 
 const STATUS_BADGE: Record<string, string> = {
@@ -109,15 +108,15 @@ function roomLabel(log: RoomUsageLogItem): string {
 }
 
 function borrowTypeLabel(log: RoomUsageLogItem): string {
-    if (log.borrow_type && BORROW_TYPE_LABEL[log.borrow_type]) {
-        return BORROW_TYPE_LABEL[log.borrow_type];
-    }
+    const type = log.borrow_type ?? 'daily_operation';
 
-    return SOURCE_LABEL[log.source] ?? 'Borrowed Room';
+    return BORROW_TYPE_LABEL[type] ?? 'Borrowed Room';
 }
 
-function sourceBadgeClass(log: RoomUsageLogItem): string {
-    return SOURCE_BADGE[log.source] ?? SOURCE_BADGE.schedule_exception;
+function borrowTypeBadgeClass(log: RoomUsageLogItem): string {
+    const type = log.borrow_type ?? 'daily_operation';
+
+    return BORROW_TYPE_BADGE[type] ?? BORROW_TYPE_BADGE.daily_operation;
 }
 
 function statusBadgeClass(log: RoomUsageLogItem): string {
@@ -178,7 +177,7 @@ function statusBadgeClass(log: RoomUsageLogItem): string {
                         </td>
 
                         <td class="px-4 py-3 align-top">
-                            <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-bold" :class="sourceBadgeClass(log)">
+                            <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-bold" :class="borrowTypeBadgeClass(log)">
                                 {{ borrowTypeLabel(log) }}
                             </span>
                         </td>
@@ -198,7 +197,7 @@ function statusBadgeClass(log: RoomUsageLogItem): string {
                                 </div>
                                 <div class="text-sm font-bold text-gray-800">No valid borrowing records found</div>
                                 <p class="text-xs leading-relaxed text-gray-500">
-                                    Cancelled, blocked, unclaimed, reserved-only, maintenance, and unavailable room records are intentionally excluded from this page.
+                                    Start or complete a class in Daily Operations to generate a valid room borrowing record.
                                 </p>
                             </div>
                         </td>

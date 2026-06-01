@@ -7,9 +7,9 @@ export interface RoomOption {
 
 export type RoomUsageSource = 'schedule' | 'schedule_exception';
 
-export type RoomUsageStatus = 'occupied' | 'completed' | 'reserved' | 'cancelled' | 'auto_cancelled' | string;
+export type RoomUsageStatus = 'occupied' | 'completed';
 
-export type BorrowType = 'regular' | 'room_change' | 'special_class' | 'makeup_class' | string;
+export type BorrowType = 'regular' | 'room_change' | 'special_class' | 'makeup_class' | 'daily_operation' | string;
 
 export interface RoomUsageLogItem {
     id: number | string;
@@ -25,7 +25,7 @@ export interface RoomUsageLogItem {
     subject_title: string;
     section: string;
     instructor_name?: string | null;
-    status: RoomUsageStatus;
+    status: RoomUsageStatus | string;
     expected_start: string;
     expected_end: string;
     actual_start?: string | null;
@@ -39,5 +39,5 @@ export interface RoomUsageFiltersState {
     date_from: string;
     date_to: string;
     room_ids: number[];
-    source: 'all' | RoomUsageSource;
+    borrow_type: 'all' | BorrowType;
 }

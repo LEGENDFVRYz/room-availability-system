@@ -3,7 +3,7 @@ import AdminFilterField from '@/components/AdminFilterField.vue';
 import AdminFilterPanel from '@/components/AdminFilterPanel.vue';
 import RoomMultiSelect from '@/components/RoomMultiSelect.vue';
 import { RotateCcw, Search } from 'lucide-vue-next';
-import type { RoomOption, RoomUsageFiltersState } from './type';
+import type { BorrowType, RoomOption, RoomUsageFiltersState } from './type';
 
 const props = defineProps<{
     filters: RoomUsageFiltersState;
@@ -38,8 +38,8 @@ function updateDateTo(event: Event) {
     setFilter('date_to', (event.target as HTMLInputElement).value);
 }
 
-function updateSource(event: Event) {
-    setFilter('source', (event.target as HTMLSelectElement).value as RoomUsageFiltersState['source']);
+function updateBorrowType(event: Event) {
+    setFilter('borrow_type', (event.target as HTMLSelectElement).value as 'all' | BorrowType);
 }
 </script>
 
@@ -102,13 +102,15 @@ function updateSource(event: Event) {
 
             <AdminFilterField label="Borrowing type">
                 <select
-                    :value="filters.source"
+                    :value="filters.borrow_type"
                     :class="`${filterControlClass} w-full`"
-                    @change="updateSource"
+                    @change="updateBorrowType"
                 >
                     <option value="all">All valid types</option>
-                    <option value="schedule">Regular schedule</option>
-                    <option value="schedule_exception">Daily operation</option>
+                    <option value="regular">Regular class</option>
+                    <option value="room_change">Room change</option>
+                    <option value="special_class">Special class</option>
+                    <option value="makeup_class">Makeup class</option>
                 </select>
             </AdminFilterField>
         </div>

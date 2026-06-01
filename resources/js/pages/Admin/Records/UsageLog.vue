@@ -3,7 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import PillTabs from '@/components/PillTabs.vue';
 import type { BreadcrumbItem, PageHeader } from '@/types';
 import { Head } from '@inertiajs/vue3';
-import { BookOpenCheck, CheckCircle2, Clock3, Info, ScrollText, SquareActivity } from 'lucide-vue-next';
+import { BookOpenCheck, CheckCircle2, Clock3, ScrollText, SquareActivity } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import UsageLogFilters from './components/UsageLogFilters.vue';
 import UsageLogTable from './components/UsageLogTable.vue';
@@ -35,106 +35,12 @@ const props = withDefaults(
     },
 );
 
-const demoRooms: RoomOption[] = [
-    { id: 1, code: 'CPE 301', name: 'Lecture Room' },
-    { id: 2, code: 'CPE 302', name: 'Lecture Room' },
-    { id: 3, code: 'CPE 317', name: 'Microcomputer Laboratory' },
-    { id: 4, code: 'CPE 319', name: 'Electronics Laboratory' },
-];
-
-const demoLogs: RoomUsageLogItem[] = [
-    {
-        id: 1,
-        usage_date: '2026-06-01',
-        source: 'schedule',
-        schedule_id: 14,
-        schedule_exception_id: null,
-        room_id: 1,
-        room_code: 'CPE 301',
-        room_name: 'Lecture Room',
-        borrow_type: 'regular',
-        subject_code: 'CPE 411',
-        subject_title: 'Embedded Systems',
-        section: 'BSCpE 4-1',
-        instructor_name: 'Engr. Maria Santos',
-        status: 'completed',
-        expected_start: '07:30',
-        expected_end: '10:30',
-        actual_start: '07:35',
-        actual_end: '10:20',
-    },
-    {
-        id: 2,
-        usage_date: '2026-06-01',
-        source: 'schedule_exception',
-        schedule_id: 22,
-        schedule_exception_id: 8,
-        room_id: 3,
-        room_code: 'CPE 317',
-        room_name: 'Microcomputer Laboratory',
-        borrow_type: 'room_change',
-        subject_code: 'CPE 323',
-        subject_title: 'Microprocessors',
-        section: 'BSCpE 3-2',
-        instructor_name: 'Prof. Daniel Reyes',
-        status: 'completed',
-        expected_start: '10:30',
-        expected_end: '13:30',
-        actual_start: '10:40',
-        actual_end: '13:15',
-    },
-    {
-        id: 3,
-        usage_date: '2026-06-01',
-        source: 'schedule_exception',
-        schedule_id: null,
-        schedule_exception_id: 11,
-        room_id: 4,
-        room_code: 'CPE 319',
-        room_name: 'Electronics Laboratory',
-        borrow_type: 'special_class',
-        subject_code: 'CPE 214',
-        subject_title: 'Logic Circuits Laboratory',
-        section: 'BSCpE 2-1',
-        instructor_name: 'Engr. Camille Dela Cruz',
-        status: 'occupied',
-        expected_start: '14:00',
-        expected_end: '17:00',
-        actual_start: '14:05',
-        actual_end: null,
-    },
-    {
-        id: 4,
-        usage_date: '2026-05-31',
-        source: 'schedule_exception',
-        schedule_id: null,
-        schedule_exception_id: 15,
-        room_id: 2,
-        room_code: 'CPE 302',
-        room_name: 'Lecture Room',
-        borrow_type: 'makeup_class',
-        subject_code: 'CPE 312',
-        subject_title: 'Data Communications',
-        section: 'BSCpE 3-1',
-        instructor_name: 'Dr. Adrian Lim',
-        status: 'completed',
-        expected_start: '08:00',
-        expected_end: '11:00',
-        actual_start: '08:00',
-        actual_end: '10:50',
-    },
-];
-
-const displayRooms = computed(() => (props.rooms.length > 0 ? props.rooms : demoRooms));
-const displayLogs = computed(() => (props.logs.length > 0 ? props.logs : demoLogs));
-const isShowingDemoData = computed(() => props.logs.length === 0);
-
 const filters = ref<RoomUsageFiltersState>({
     search: '',
     date_from: '',
     date_to: '',
     room_ids: [],
-    source: 'all',
+    borrow_type: 'all',
 });
 
 function resetFilters() {
@@ -143,7 +49,7 @@ function resetFilters() {
         date_from: '',
         date_to: '',
         room_ids: [],
-        source: 'all',
+        borrow_type: 'all',
     };
 }
 
@@ -196,7 +102,7 @@ function parseMinutes(value?: string | null): number | null {
     return hour * 60 + minute;
 }
 
-const validBorrowingLogs = computed(() => displayLogs.value.filter(isValidBorrowingLog));
+const validBorrowingLogs = computed(() => props.logs.filter(isValidBorrowingLog));
 
 const filteredLogs = computed(() => {
     return validBorrowingLogs.value.filter((log) => {
@@ -207,7 +113,7 @@ const filteredLogs = computed(() => {
         if (filters.value.date_from && usageDate < filters.value.date_from) return false;
         if (filters.value.date_to && usageDate > filters.value.date_to) return false;
         if (filters.value.room_ids.length > 0 && !filters.value.room_ids.includes(log.room_id)) return false;
-        if (filters.value.source !== 'all' && log.source !== filters.value.source) return false;
+        if (filters.value.borrow_type !== 'all' && log.borrow_type !== filters.value.borrow_type) return false;
 
         return true;
     });
@@ -275,21 +181,6 @@ const summaryCards = computed(() => [
         <div class="space-y-6">
             <PillTabs :tabs="manageTabs" />
 
-            <div class="rounded-xl border border-pup-gold/40 bg-pup-gold-pale/40 p-4 text-sm text-pup-maroon-deep">
-                <div class="flex gap-3">
-                    <Info class="mt-0.5 h-4 w-4 shrink-0 text-pup-maroon" />
-                    <div>
-                        <p class="font-bold">This page only shows valid room borrowing records.</p>
-                        <p class="mt-1 text-xs leading-relaxed text-pup-maroon/80">
-                            Cancelled classes, unclaimed classes, blocked slots, maintenance, unavailable rooms, and reserved-only override records are excluded so this page stays focused on actual classroom use.
-                        </p>
-                        <p v-if="isShowingDemoData" class="mt-2 inline-flex rounded-full bg-white/70 px-2.5 py-1 text-[11px] font-bold text-pup-maroon shadow-sm">
-                            Preview mode: showing sample borrowing records until backend data is connected.
-                        </p>
-                    </div>
-                </div>
-            </div>
-
             <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <div
                     v-for="card in summaryCards"
@@ -312,7 +203,7 @@ const summaryCards = computed(() => [
 
             <UsageLogFilters
                 :filters="filters"
-                :rooms="displayRooms"
+                :rooms="props.rooms"
                 :result-count="filteredLogs.length"
                 @update:filters="filters = $event"
                 @reset="resetFilters"

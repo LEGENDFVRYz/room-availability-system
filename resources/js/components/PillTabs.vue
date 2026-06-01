@@ -3,12 +3,19 @@ import { Link, usePage } from '@inertiajs/vue3';
 import type { Component } from 'vue';
 import { computed } from 'vue';
 
-interface Tab {
+type LinkTab = {
     label: string;
-    href?: string;
-    value?: string;
+    href: string;
     icon?: Component;
-}
+};
+
+type ValueTab = {
+    label: string;
+    value: string;
+    icon?: Component;
+};
+
+type Tab = LinkTab | ValueTab;
 
 const props = defineProps<{
     tabs: Tab[];
@@ -22,13 +29,17 @@ const emit = defineEmits<{
 const page = usePage();
 const url = computed(() => page.url);
 
-function isActive(tab: Tab) {
-    if (props.activeValue !== undefined) {
-        return tab.value === props.activeValue;
-    }
+function isValueTab(tab: Tab): tab is ValueTab {
+    return 'value' in tab;
+}
 
-    if (!tab.href) {
-        return false;
+function getTabKey(tab: Tab): string {
+    return isValueTab(tab) ? tab.value : tab.href;
+}
+
+function isActive(tab: Tab): boolean {
+    if (isValueTab(tab)) {
+        return props.activeValue === tab.value;
     }
 
     return url.value === tab.href
@@ -36,48 +47,41 @@ function isActive(tab: Tab) {
         || url.value.startsWith(tab.href + '/');
 }
 
-function tabClasses(tab: Tab) {
+function selectTab(tab: ValueTab) {
+    emit('update:activeValue', tab.value);
+}
+
+function tabClass(tab: Tab): string[] {
     return [
         'flex items-center gap-2 rounded-full px-5 py-1.5 text-sm font-medium transition-all duration-150',
         isActive(tab)
             ? 'bg-pup-maroon text-white shadow-sm'
-            : 'text-pup-gray-600 hover:text-pup-maroon',
+            : 'text-gray-500 hover:text-pup-maroon',
     ];
-}
-
-function selectTab(tab: Tab) {
-    if (tab.value === undefined) {
-        return;
-    }
-
-    emit('update:activeValue', tab.value);
 }
 </script>
 
 <template>
     <div class="inline-flex items-center rounded-full bg-pup-gold/15 p-1 ring-1 ring-black/[0.06]">
-        <template
-            v-for="tab in tabs"
-            :key="tab.href ?? tab.value ?? tab.label"
-        >
-            <Link
-                v-if="tab.href"
-                :href="tab.href"
-                :class="tabClasses(tab)"
-            >
-                <component v-if="tab.icon" :is="tab.icon" class="h-4 w-4" />
-                {{ tab.label }}
-            </Link>
-
+        <template v-for="tab in tabs" :key="getTabKey(tab)">
             <button
-                v-else
+                v-if="isValueTab(tab)"
                 type="button"
-                :class="tabClasses(tab)"
+                :class="tabClass(tab)"
                 @click="selectTab(tab)"
             >
                 <component v-if="tab.icon" :is="tab.icon" class="h-4 w-4" />
                 {{ tab.label }}
             </button>
+
+            <Link
+                v-else
+                :href="tab.href"
+                :class="tabClass(tab)"
+            >
+                <component v-if="tab.icon" :is="tab.icon" class="h-4 w-4" />
+                {{ tab.label }}
+            </Link>
         </template>
     </div>
 </template>

@@ -24,6 +24,7 @@ type Announcement = {
     body: string;
     type: AnnouncementType;
     typeLabel: string;
+    sourceType?: string | null;
     design: NoticeDesign;
     room?: string | null;
     schedule?: string | null;

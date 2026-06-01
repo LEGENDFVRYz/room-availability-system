@@ -27,6 +27,7 @@ const STATUS_LABEL: Record<DailySlotStatus, string> = {
     ongoing: 'Occupied',
     completed: 'Finished',
     cancelled: 'Cancelled',
+    unclaimed: 'Unclaimed',
     auto_cancelled: 'Auto-cancelled',
     maintenance: 'Maintenance',
     unavailable: 'Unavailable',
@@ -52,6 +53,7 @@ const STATUS_BADGE: Record<DailySlotStatus, string> = {
     ongoing: 'bg-status-occupied-bg text-status-occupied',
     completed: 'bg-gray-100 text-gray-600',
     cancelled: 'bg-slate-100 text-slate-600',
+    unclaimed: 'bg-slate-100 text-slate-600',
     auto_cancelled: 'bg-rose-50 text-rose-700',
     maintenance: 'bg-status-maintenance-bg text-status-maintenance',
     unavailable: 'bg-pup-gray-200 text-pup-gray-800',
@@ -173,7 +175,7 @@ function isExceptionSlot(slot: DailySlot): boolean {
 }
 
 function isCancelledSlot(slot: DailySlot): boolean {
-    return slot.event_type === 'cancellation' || ['cancelled', 'auto_cancelled'].includes(slot.status);
+    return slot.event_type === 'cancellation' || ['cancelled', 'auto_cancelled', 'unclaimed'].includes(slot.status);
 }
 
 function statusDotClass(slot: DailySlot): string {
@@ -236,7 +238,7 @@ function overrideHasAffectedClass(slot: DailySlot, slots: DailySlot[]): boolean 
         return (
             isClassSlot(candidate) &&
             candidate.room_id === slot.room_id &&
-            !['cancelled', 'auto_cancelled'].includes(candidate.status) &&
+            !['cancelled', 'auto_cancelled', 'unclaimed'].includes(candidate.status) &&
             slotsOverlap(slot, candidate)
         );
     });
@@ -321,6 +323,7 @@ const currentTimeLabel = computed(() => (activeNow.value === null ? '' : formatM
 
 function isSlotCurrent(slot: DailySlot): boolean {
     if (activeNow.value === null) return false;
+    if (['cancelled', 'auto_cancelled', 'unclaimed', 'completed'].includes(slot.status)) return false;
 
     return parseMinutes(slot.start_time) <= activeNow.value && activeNow.value < parseMinutes(effectiveEndTime(slot));
 }

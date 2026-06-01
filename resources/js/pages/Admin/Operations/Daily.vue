@@ -3,7 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import PillTabs from '@/components/PillTabs.vue';
 import type { BreadcrumbItem, PageHeader } from '@/types';
 import { Head, router, usePage } from '@inertiajs/vue3';
-import { AlertCircle, CalendarDays, Clock3, ClipboardPlus, RefreshCw, School } from 'lucide-vue-next';
+import { AlertCircle, CalendarDays, Clock3, Plus, RefreshCw, School } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import DailyFilters from './Components/DailyFilters.vue';
 import DailyRequestClassModal from './Components/DailyRequestClassModal.vue';
@@ -47,6 +47,7 @@ const STATUS_LABEL: Record<DailySlotStatus, string> = {
     ongoing: 'Occupied',
     completed: 'Finished',
     cancelled: 'Cancelled',
+    unclaimed: 'Unclaimed',
     auto_cancelled: 'Auto-cancelled',
     maintenance: 'Maintenance',
     unavailable: 'Unavailable',
@@ -72,6 +73,7 @@ const STATUS_BADGE: Record<DailySlotStatus, string> = {
     ongoing: 'bg-status-occupied-bg text-status-occupied',
     completed: 'bg-gray-100 text-gray-600',
     cancelled: 'bg-slate-100 text-slate-600',
+    unclaimed: 'bg-slate-100 text-slate-600',
     auto_cancelled: 'bg-rose-50 text-rose-700',
     maintenance: 'bg-status-maintenance-bg text-status-maintenance',
     unavailable: 'bg-pup-gray-200 text-pup-gray-800',
@@ -152,7 +154,7 @@ function isExceptionSlot(slot: DailySlot): boolean {
 }
 
 function isCancelledSlot(slot: DailySlot): boolean {
-    return slot.event_type === 'cancellation' || ['cancelled', 'auto_cancelled'].includes(slot.status);
+    return slot.event_type === 'cancellation' || ['cancelled', 'auto_cancelled', 'unclaimed'].includes(slot.status);
 }
 
 function statusDotClass(slot: DailySlot): string {
@@ -214,7 +216,7 @@ function overrideHasAffectedClass(slot: DailySlot, slots: DailySlot[]): boolean 
         return (
             isClassSlot(candidate) &&
             candidate.room_id === slot.room_id &&
-            !['cancelled', 'auto_cancelled'].includes(candidate.status) &&
+            !['cancelled', 'auto_cancelled', 'unclaimed'].includes(candidate.status) &&
             slotsOverlap(slot, candidate)
         );
     });
@@ -275,12 +277,14 @@ interface Props {
     rooms?: Room[];
     daily_schedules?: DailySlot[];
     selected_date?: string;
+    claim_grace_minutes?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     rooms: () => [],
     daily_schedules: () => [],
     selected_date: '',
+    claim_grace_minutes: 60,
 });
 
 const page = usePage<SharedProps>();
@@ -310,6 +314,7 @@ const selectedDate = ref(props.selected_date || todayIso());
 const viewMode = ref<ViewMode>('room');
 const selectedRoomIds = ref<number[]>([]);
 const selectedType = ref<'all' | DailySlotType>('all');
+const claimGraceMinutes = computed(() => Math.max(1, Number(props.claim_grace_minutes || 60)));
 
 // Client-side only clock state.
 const currentDateTime = ref(new Date());
@@ -327,6 +332,65 @@ watch(
     },
     { immediate: true },
 );
+
+function slotStartDate(slot: DailySlot): Date | null {
+    const date = new Date(`${slot.event_date}T${slot.start_time}:00`);
+
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function slotClaimDeadline(slot: DailySlot): Date | null {
+    const start = slotStartDate(slot);
+    if (!start) return null;
+
+    const deadline = new Date(start);
+    deadline.setMinutes(deadline.getMinutes() + claimGraceMinutes.value);
+
+    return deadline;
+}
+
+function localIsoString(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hour = String(date.getHours()).padStart(2, '0');
+    const minute = String(date.getMinutes()).padStart(2, '0');
+
+    return `${year}-${month}-${day}T${hour}:${minute}:00`;
+}
+
+function timeString(date: Date): string {
+    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function isClientSideUnclaimed(slot: DailySlot): boolean {
+    if (slot.source !== 'schedule' || slot.event_type !== 'regular') return false;
+    if (!['scheduled', 'pending'].includes(slot.status)) return false;
+    if (slot.actual_start || slot.actual_end || slot.claimed_at) return false;
+
+    const deadline = slotClaimDeadline(slot);
+    if (!deadline) return false;
+
+    const endDate = new Date(`${slot.event_date}T${slot.end_time}:00`);
+    if (!Number.isNaN(endDate.getTime()) && deadline.getTime() >= endDate.getTime()) return false;
+
+    return currentDateTime.value.getTime() >= deadline.getTime();
+}
+
+function applyClientSideUnclaimedStatus(slot: DailySlot): DailySlot {
+    if (slot.source !== 'schedule' || slot.event_type !== 'regular') return slot;
+
+    const deadline = slotClaimDeadline(slot);
+    const enrichedSlot: DailySlot = {
+        ...slot,
+        claim_deadline_at: deadline ? localIsoString(deadline) : slot.claim_deadline_at ?? null,
+        claim_deadline_time: deadline ? timeString(deadline) : slot.claim_deadline_time ?? null,
+    };
+
+    return isClientSideUnclaimed(slot) ? { ...enrichedSlot, status: 'unclaimed' } : enrichedSlot;
+}
+
+const displaySlots = computed<DailySlot[]>(() => localSlots.value.map(applyClientSideUnclaimedStatus));
 
 const roomMap = computed(() => new Map(rooms.value.map((room) => [room.id, room])));
 const roomCode = (roomId: number) => roomMap.value.get(roomId)?.code ?? `Room ${roomId}`;
@@ -379,7 +443,7 @@ function goToSelectedDate() {
 }
 
 const filteredSlots = computed(() => {
-    return localSlots.value
+    return displaySlots.value
         .filter((slot) => !slot.event_date || slot.event_date === selectedDate.value)
         .filter((slot) => selectedRoomIds.value.length === 0 || selectedRoomIds.value.includes(slot.room_id))
         .filter((slot) => selectedType.value === 'all' || slot.event_type === selectedType.value)
@@ -407,7 +471,7 @@ const nowMinutes = computed(() => {
 
 function isSlotHappeningNow(slot: DailySlot): boolean {
     if (nowMinutes.value === null) return false;
-    if (['cancelled', 'auto_cancelled', 'completed'].includes(slot.status)) return false;
+    if (['cancelled', 'auto_cancelled', 'unclaimed', 'completed'].includes(slot.status)) return false;
 
     return parseMinutes(slot.start_time) <= nowMinutes.value && nowMinutes.value < parseMinutes(slot.end_time);
 }
@@ -430,7 +494,7 @@ const upcomingSoonCount = computed(() => {
     if (nowMinutes.value === null) return 0;
 
     return filteredSlots.value.filter((slot) => {
-        if (!isClassSlot(slot) || ['cancelled', 'auto_cancelled', 'completed', 'ongoing'].includes(slot.status)) return false;
+        if (!isClassSlot(slot) || ['cancelled', 'auto_cancelled', 'unclaimed', 'completed', 'ongoing'].includes(slot.status)) return false;
 
         const start = parseMinutes(slot.start_time);
         return start >= nowMinutes.value && start <= nowMinutes.value + 30;
@@ -563,6 +627,21 @@ function applySlotAction(payload: SlotActionPayload) {
 
     if (payload.action === 'complete') {
         router.patch('/admin/operations/daily/mark-completed', basePayload, options);
+        return;
+    }
+
+    if (payload.action === 'revert-started') {
+        router.patch('/admin/operations/daily/revert-started', basePayload, options);
+        return;
+    }
+
+    if (payload.action === 'revert-completed') {
+        router.patch('/admin/operations/daily/revert-completed', basePayload, options);
+        return;
+    }
+
+    if (payload.action === 'revert-cancellation') {
+        router.patch('/admin/operations/daily/revert-cancellation', basePayload, options);
     }
 }
 
@@ -592,7 +671,7 @@ onUnmounted(() => {
                     @click="openClassModal"
                     class="inline-flex items-center gap-1.5 rounded-lg border border-pup-maroon/15 bg-white px-3.5 py-2 text-sm font-medium text-pup-maroon shadow-sm transition hover:bg-pup-maroon-pale"
                 >
-                    <ClipboardPlus class="h-4 w-4" />
+                    <Plus class="h-4 w-4" />
                     Request Class
                 </button>
             </div>
@@ -663,26 +742,25 @@ onUnmounted(() => {
                     <p class="text-xs text-green-600">selected rooms without active class</p>
                 </div>
                 <div class="rounded-xl border border-pup-gold/30 bg-pup-gold-pale/50 p-4 shadow-sm">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-pup-maroon">Reserved Now</p>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-pup-maroon">Reserved Now (Upcoming)</p>
                     <p class="mt-2 text-2xl font-bold text-pup-maroon-deep">
-                        {{ summaryStats.reservedNowCount }}
+                        {{ summaryStats.reservedNowCount }} ({{ summaryStats.upcomingSoonCount }})
                     </p>
-                    <p class="text-xs text-pup-maroon/70">classes awaiting claim</p>
+                    <p class="text-xs text-pup-maroon/70">classes are waiting to claim</p>
                 </div>
                 <div class="rounded-xl border border-red-100 bg-red-50/70 p-4 shadow-sm">
                     <p class="text-xs font-semibold uppercase tracking-wide text-red-500">Occupied Now</p>
                     <p class="mt-2 text-2xl font-bold text-red-800">
                         {{ summaryStats.occupiedNowCount }}
                     </p>
-                    <p class="text-xs text-red-600">marked as started</p>
+                    <p class="text-xs text-red-600">rooms currently occupied for classes</p>
                 </div>
                 <div class="rounded-xl border border-orange-100 bg-orange-50/70 p-4 shadow-sm">
                     <p class="text-xs font-semibold uppercase tracking-wide text-orange-600">Risk / Exceptions</p>
                     <p class="mt-2 text-2xl font-bold text-orange-800">
-                        {{ summaryStats.upcomingSoonCount }} /
                         {{ summaryStats.exceptionCount }}
                     </p>
-                    <p class="text-xs text-orange-600">starting soon / daily changes</p>
+                    <p class="text-xs text-orange-600">daily changes for selected date</p>
                 </div>
             </div>
 

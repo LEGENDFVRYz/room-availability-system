@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowRightLeft, Ban, CheckCircle2, Play, X } from 'lucide-vue-next';
+import { ArrowRightLeft, Ban, CheckCircle2, Play, RotateCcw, X } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 import type { DailySlot, DailySlotStatus, DailySlotType, Room, SlotAction, SlotActionPayload, YearLevel } from './type';
 
@@ -27,6 +27,7 @@ const STATUS_LABEL: Record<DailySlotStatus, string> = {
     ongoing: 'Occupied',
     completed: 'Finished',
     cancelled: 'Cancelled',
+    unclaimed: 'Unclaimed',
     auto_cancelled: 'Auto-cancelled',
     maintenance: 'Maintenance',
     unavailable: 'Unavailable',
@@ -52,6 +53,7 @@ const STATUS_BADGE: Record<DailySlotStatus, string> = {
     ongoing: 'bg-status-occupied-bg text-status-occupied',
     completed: 'bg-gray-100 text-gray-600',
     cancelled: 'bg-slate-100 text-slate-600',
+    unclaimed: 'bg-slate-100 text-slate-600',
     auto_cancelled: 'bg-rose-50 text-rose-700',
     maintenance: 'bg-status-maintenance-bg text-status-maintenance',
     unavailable: 'bg-pup-gray-200 text-pup-gray-800',
@@ -141,6 +143,17 @@ function formatOriginalEnd(slot: DailySlot): string {
     return formatTime(slot.end_time);
 }
 
+
+function formatClaimDeadline(slot: DailySlot): string {
+    if (slot.claim_deadline_time) return formatTime(slot.claim_deadline_time);
+    if (slot.claim_deadline_at) {
+        const normalized = normalizeTimeValue(slot.claim_deadline_at);
+        if (normalized) return formatTime(normalized);
+    }
+
+    return 'the claim deadline';
+}
+
 function yearLevel(slot: DailySlot): YearLevel {
     const section = slot.section ?? '';
     const bscpeMatch = section.match(/BSCPE\s*([1-4])/i);
@@ -164,7 +177,7 @@ function isExceptionSlot(slot: DailySlot): boolean {
 }
 
 function isCancelledSlot(slot: DailySlot): boolean {
-    return slot.event_type === 'cancellation' || ['cancelled', 'auto_cancelled'].includes(slot.status);
+    return slot.event_type === 'cancellation' || ['cancelled', 'auto_cancelled', 'unclaimed'].includes(slot.status);
 }
 
 function statusDotClass(slot: DailySlot): string {
@@ -228,7 +241,7 @@ function overrideHasAffectedClass(slot: DailySlot, slots: DailySlot[]): boolean 
     return slots.some((candidate) => {
         return isClassSlot(candidate)
             && candidate.room_id === slot.room_id
-            && !['cancelled', 'auto_cancelled'].includes(candidate.status)
+            && !['cancelled', 'auto_cancelled', 'unclaimed'].includes(candidate.status)
             && slotsOverlap(slot, candidate);
     });
 }
@@ -311,6 +324,7 @@ const actionError = computed(() => {
         ?? props.errors?.end_time
         ?? props.errors?.schedule_id
         ?? props.errors?.exception_id
+        ?? props.errors?.usage_log_id
         ?? '';
 });
 
@@ -319,6 +333,59 @@ const roomLabel = (roomId: number) => {
     const room = roomMap.value.get(roomId);
     return room ? `${room.code} · ${room.name}` : `Room #${roomId}`;
 };
+
+function timeFromMinutes(totalMinutes: number): string {
+    const hour = Math.floor(totalMinutes / 60);
+    const minute = totalMinutes % 60;
+
+    return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+}
+
+const remainingTimeRoomChangeNotice = computed(() => {
+    const slot = props.slot;
+
+    if (!slot || activeAction.value !== 'change-room' || !changeRoomId.value) {
+        return null;
+    }
+
+    const targetRoomId = Number(changeRoomId.value);
+    const originalStartMinutes = parseMinutes(slot.start_time);
+    const originalEndTime = effectiveEndTime(slot);
+    const originalEndMinutes = parseMinutes(originalEndTime);
+    let effectiveStartMinutes = originalStartMinutes;
+
+    props.allSlots
+        .filter((candidate) => {
+            return candidate.room_id === targetRoomId
+                && candidate.status === 'unclaimed'
+                && candidate.source === 'schedule'
+                && slotsOverlap(slot, candidate);
+        })
+        .forEach((candidate) => {
+            const claimDeadline = candidate.claim_deadline_time ?? normalizeTimeValue(candidate.claim_deadline_at) ?? null;
+            if (!claimDeadline) return;
+
+            const claimStartMinutes = parseMinutes(candidate.start_time);
+            const claimDeadlineMinutes = parseMinutes(claimDeadline);
+
+            if (claimStartMinutes <= effectiveStartMinutes && claimDeadlineMinutes > effectiveStartMinutes && claimDeadlineMinutes < originalEndMinutes) {
+                effectiveStartMinutes = claimDeadlineMinutes;
+            }
+        });
+
+    if (effectiveStartMinutes <= originalStartMinutes || effectiveStartMinutes >= originalEndMinutes) {
+        return null;
+    }
+
+    const effectiveStartTime = timeFromMinutes(effectiveStartMinutes);
+
+    return {
+        room: roomLabel(targetRoomId),
+        startTime: effectiveStartTime,
+        startLabel: formatTime(effectiveStartTime),
+        endLabel: formatTime(originalEndTime),
+    };
+});
 
 watch(
     () => props.slot,
@@ -419,6 +486,16 @@ function applyAction() {
                     This room override overlaps at least one class. The room status control wins over schedule items during the overlap.
                 </div>
 
+                <div
+                    v-if="slot.status === 'unclaimed'"
+                    class="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700"
+                >
+                    <p class="font-semibold text-gray-800">Unclaimed class</p>
+                    <p class="mt-1 text-xs leading-relaxed text-gray-600">
+                        This class was not claimed by {{ formatClaimDeadline(slot) }}. The backend now allows the remaining time to be reclaimed by another approved class request, but no room usage log is written for this unclaimed state.
+                    </p>
+                </div>
+
                 <div v-if="slot.reason" class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                     <p class="font-semibold">Reason / Note</p>
                     <p class="mt-1">{{ slot.reason }}</p>
@@ -444,7 +521,7 @@ function applyAction() {
                         Change Room
                     </button>
                     <button
-                        v-if="slot.source !== 'override' && ['scheduled', 'pending'].includes(slot.status)"
+                        v-if="slot.source !== 'override' && ['scheduled', 'pending', 'unclaimed'].includes(slot.status)"
                         type="button"
                         @click="openAction('start')"
                         class="inline-flex items-center gap-2 rounded-lg border border-green-200 px-3 py-2 text-sm font-semibold text-green-700 transition hover:bg-green-50"
@@ -455,11 +532,38 @@ function applyAction() {
                     <button
                         v-if="slot.source !== 'override' && slot.status === 'ongoing'"
                         type="button"
+                        @click="openAction('revert-started')"
+                        class="inline-flex items-center gap-2 rounded-lg border border-pup-maroon/20 px-3 py-2 text-sm font-semibold text-pup-maroon transition hover:bg-pup-maroon-pale"
+                    >
+                        <RotateCcw class="h-4 w-4" />
+                        Revert Start
+                    </button>
+                    <button
+                        v-if="slot.source !== 'override' && slot.status === 'ongoing'"
+                        type="button"
                         @click="openAction('complete')"
                         class="inline-flex items-center gap-2 rounded-lg bg-pup-maroon px-3 py-2 text-sm font-semibold text-white transition hover:bg-pup-maroon-deep"
                     >
                         <CheckCircle2 class="h-4 w-4" />
                         Complete
+                    </button>
+                    <button
+                        v-if="slot.source !== 'override' && slot.status === 'completed'"
+                        type="button"
+                        @click="openAction('revert-completed')"
+                        class="inline-flex items-center gap-2 rounded-lg border border-pup-maroon/20 px-3 py-2 text-sm font-semibold text-pup-maroon transition hover:bg-pup-maroon-pale"
+                    >
+                        <RotateCcw class="h-4 w-4" />
+                        Reopen as Ongoing
+                    </button>
+                    <button
+                        v-if="slot.source !== 'override' && slot.status === 'cancelled'"
+                        type="button"
+                        @click="openAction('revert-cancellation')"
+                        class="inline-flex items-center gap-2 rounded-lg border border-pup-maroon/20 px-3 py-2 text-sm font-semibold text-pup-maroon transition hover:bg-pup-maroon-pale"
+                    >
+                        <RotateCcw class="h-4 w-4" />
+                        Restore Class
                     </button>
                 </div>
 
@@ -469,9 +573,26 @@ function applyAction() {
                         <template v-if="activeAction === 'change-room'">Change room for this date?</template>
                         <template v-if="activeAction === 'start'">Mark this class as started?</template>
                         <template v-if="activeAction === 'complete'">Mark this class as completed?</template>
+                        <template v-if="activeAction === 'revert-started'">Revert this class start?</template>
+                        <template v-if="activeAction === 'revert-completed'">Reopen this completed class?</template>
+                        <template v-if="activeAction === 'revert-cancellation'">Restore this cancelled class?</template>
                     </h4>
                     <p class="mt-1 text-sm text-gray-500">
-                        This action will update the Daily Operations records and refresh the board.
+                        <template v-if="activeAction === 'revert-started'">
+                            This clears the actual start/end times in the room usage log and moves the class back to awaiting claim.
+                        </template>
+                        <template v-else-if="activeAction === 'revert-completed'">
+                            This clears the actual end time in the room usage log and moves the class back to occupied/ongoing.
+                        </template>
+                        <template v-else-if="activeAction === 'revert-cancellation'">
+                            This restores the class for the selected date and resets the cancelled usage log entry.
+                        </template>
+                        <template v-else-if="activeAction === 'start' && slot.status === 'unclaimed'">
+                            This starts an unclaimed class. The backend will still block the action if another class has already reclaimed the room.
+                        </template>
+                        <template v-else>
+                            This action will update the Daily Operations records and refresh the board.
+                        </template>
                     </p>
 
                     <div v-if="actionError" class="mt-4 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-700">
@@ -487,6 +608,18 @@ function applyAction() {
                             </option>
                         </select>
                     </label>
+
+                    <div
+                        v-if="activeAction === 'change-room' && remainingTimeRoomChangeNotice"
+                        class="mt-4 rounded-xl border border-pup-gold/40 bg-pup-gold-pale/60 px-3.5 py-3 text-sm text-pup-maroon-dark"
+                    >
+                        <p class="font-semibold">Remaining-time room change</p>
+                        <p class="mt-1 text-xs leading-relaxed text-pup-maroon-dark/80">
+                            {{ remainingTimeRoomChangeNotice.room }} has an unclaimed class claim window before
+                            {{ remainingTimeRoomChangeNotice.startLabel }}. This change will be saved only for
+                            {{ remainingTimeRoomChangeNotice.startLabel }}–{{ remainingTimeRoomChangeNotice.endLabel }}.
+                        </p>
+                    </div>
 
                     <label v-if="activeAction === 'cancel' || activeAction === 'change-room'" class="mt-4 flex flex-col gap-1 text-sm font-medium text-gray-600">
                         Reason

@@ -11,13 +11,17 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
+    public function __construct(
+        private readonly AcademicTermService $academicTermService,
+    ) {}
+
     public function index(): Response
     {
         $now  = now();
         $day  = (int) $now->format('N'); // 1=Mon … 7=Sun (matches DayOfWeek enum)
         $time = $now->format('H:i:s');
 
-        $term = (new AcademicTermService())->getCurrent();
+        $term = $this->academicTermService->getCurrent();
 
         // Room IDs that have a class running right now
         $occupiedIds = $term

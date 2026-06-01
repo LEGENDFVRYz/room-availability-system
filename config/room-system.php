@@ -24,4 +24,13 @@ return [
     'kiosk_poll_interval' => env('KIOSK_POLL_INTERVAL', 15000),
 
     'status_warning_minutes' => env('STATUS_WARNING_MINUTES', 15),
+
+
+    /*
+    |
+    | Daily Operations Claim Grace Period
+    | - Regular scheduled classes are considered claimable until this many minutes
+    |
+    */
+    'claim_grace_minutes' => (int) env('DAILY_OPERATION_CLAIM_GRACE_MINUTES', 60),
 ];

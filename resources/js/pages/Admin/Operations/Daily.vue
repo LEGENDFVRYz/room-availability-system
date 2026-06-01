@@ -742,9 +742,10 @@ onUnmounted(() => {
                     <p class="text-xs text-green-600">selected rooms without active class</p>
                 </div>
                 <div class="rounded-xl border border-pup-gold/30 bg-pup-gold-pale/50 p-4 shadow-sm">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-pup-maroon">Reserved Now (Upcoming)</p>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-pup-maroon">Reserved Now</p>
                     <p class="mt-2 text-2xl font-bold text-pup-maroon-deep">
-                        {{ summaryStats.reservedNowCount }} ({{ summaryStats.upcomingSoonCount }})
+                        {{ summaryStats.reservedNowCount }} 
+                        <span v-if="summaryStats.upcomingSoonCount" class="text-base font-semibold">({{ summaryStats.upcomingSoonCount }} soon)</span>
                     </p>
                     <p class="text-xs text-pup-maroon/70">classes are waiting to claim</p>
                 </div>

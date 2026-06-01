@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\AcademicTerm;
 use App\Models\RoomOverride;
 use App\Models\RoomUsageLog;
+use App\Services\Support\ValueNormalizer;
 use App\Models\Schedule;
 use App\Models\ScheduleException;
 use Illuminate\Support\Carbon;
@@ -13,10 +14,21 @@ use Illuminate\Validation\ValidationException;
 
 class DailyOperationService
 {
+    public function __construct(
+        private readonly AcademicTermService $academicTermService,
+        private readonly RoomUsageLogService $roomUsageLogService,
+        private readonly ValueNormalizer $normalizer,
+    ) {}
+
+    public function claimGraceMinutes(): int
+    {
+        return max(1, (int) config('daily_operations.claim_grace_minutes', 60));
+    }
+
     public function requestClass(array $data, int $userId): ScheduleException
     {
         $eventDate = Carbon::parse($data['event_date'])->toDateString();
-        $term = $this->resolveTermForDate($eventDate);
+        $term = $this->academicTermService->resolveForDate($eventDate);
 
         if (! $term) {
             throw ValidationException::withMessages([
@@ -69,7 +81,7 @@ class DailyOperationService
                     'updated_by' => $userId,
                 ]);
 
-                $this->markExceptionUsage($exception, 'cancelled', $userId);
+                $this->roomUsageLogService->markExceptionUsage($exception, 'cancelled', $userId);
 
                 return $exception;
             }
@@ -81,7 +93,7 @@ class DailyOperationService
             }
 
             $schedule = Schedule::findOrFail($data['schedule_id']);
-            $term = $this->resolveTermForDate($eventDate) ?? $schedule->academicTerm;
+            $term = $this->academicTermService->resolveForDate($eventDate) ?? $schedule->academicTerm;
 
             $exception = ScheduleException::updateOrCreate(
                 [
@@ -107,7 +119,7 @@ class DailyOperationService
                 ]
             );
 
-            $this->markScheduleUsage($schedule, $eventDate, 'cancelled', $userId);
+            $this->roomUsageLogService->markScheduleUsage($schedule, $eventDate, 'cancelled', $userId);
 
             return $exception;
         });
@@ -122,7 +134,7 @@ class DailyOperationService
 
             if (! empty($data['exception_id'])) {
                 $exception = ScheduleException::with('schedule')->findOrFail($data['exception_id']);
-                $term = $this->resolveTermForDate($eventDate) ?? $exception->academicTerm;
+                $term = $this->academicTermService->resolveForDate($eventDate) ?? $exception->academicTerm;
 
                 if (! $term) {
                     throw ValidationException::withMessages([
@@ -130,21 +142,34 @@ class DailyOperationService
                     ]);
                 }
 
+                $originalStartTime = $this->normalizer->timeString($exception->start_time);
+                $originalEndTime = $this->normalizer->timeString($exception->end_time);
+                $effectiveStartTime = $this->effectiveRoomChangeStartTime(
+                    eventDate: $eventDate,
+                    term: $term,
+                    roomId: $newRoomId,
+                    startTime: $originalStartTime,
+                    endTime: $originalEndTime,
+                    ignoreScheduleId: $exception->schedule_id,
+                );
+
                 $this->assertRoomSlotAvailable(
                     eventDate: $eventDate,
                     term: $term,
                     roomId: $newRoomId,
-                    startTime: $this->timeValue($exception->start_time),
-                    endTime: $this->timeValue($exception->end_time),
+                    startTime: $effectiveStartTime,
+                    endTime: $originalEndTime,
                     ignoreScheduleId: $exception->schedule_id,
                     ignoreExceptionId: $exception->id,
                 );
 
                 $exception->update([
                     'room_id'        => $newRoomId,
+                    'start_time'     => $effectiveStartTime,
+                    'end_time'       => $originalEndTime,
                     'reason'         => $reason ?: $exception->reason,
                     'status'         => 'pending',
-                    'auto_cancel_at' => $this->autoCancelAt($eventDate, $this->timeValue($exception->start_time)),
+                    'auto_cancel_at' => $this->autoCancelAt($eventDate, $effectiveStartTime),
                     'claimed_at'     => null,
                     'updated_by'     => $userId,
                 ]);
@@ -159,7 +184,7 @@ class DailyOperationService
             }
 
             $schedule = Schedule::findOrFail($data['schedule_id']);
-            $term = $this->resolveTermForDate($eventDate) ?? $schedule->academicTerm;
+            $term = $this->academicTermService->resolveForDate($eventDate) ?? $schedule->academicTerm;
 
             if (! $term) {
                 throw ValidationException::withMessages([
@@ -167,12 +192,23 @@ class DailyOperationService
                 ]);
             }
 
+            $originalStartTime = $this->normalizer->timeString($schedule->start_time);
+            $originalEndTime = $this->normalizer->timeString($schedule->end_time);
+            $effectiveStartTime = $this->effectiveRoomChangeStartTime(
+                eventDate: $eventDate,
+                term: $term,
+                roomId: $newRoomId,
+                startTime: $originalStartTime,
+                endTime: $originalEndTime,
+                ignoreScheduleId: $schedule->id,
+            );
+
             $this->assertRoomSlotAvailable(
                 eventDate: $eventDate,
                 term: $term,
                 roomId: $newRoomId,
-                startTime: $this->timeValue($schedule->start_time),
-                endTime: $this->timeValue($schedule->end_time),
+                startTime: $effectiveStartTime,
+                endTime: $originalEndTime,
                 ignoreScheduleId: $schedule->id,
             );
 
@@ -185,15 +221,15 @@ class DailyOperationService
                 [
                     'academic_term_id' => $term->id,
                     'room_id'          => $newRoomId,
-                    'start_time'       => $schedule->start_time,
-                    'end_time'         => $schedule->end_time,
+                    'start_time'       => $effectiveStartTime,
+                    'end_time'         => $originalEndTime,
                     'subject_code'     => $schedule->subject_code,
                     'subject_title'    => $schedule->subject_title,
                     'section'          => $schedule->section,
                     'instructor_name'  => $schedule->instructor_name,
                     'reason'           => $reason,
                     'status'           => 'pending',
-                    'auto_cancel_at'   => $this->autoCancelAt($eventDate, $this->timeValue($schedule->start_time)),
+                    'auto_cancel_at'   => $this->autoCancelAt($eventDate, $effectiveStartTime),
                     'claimed_at'       => null,
                     'created_by'       => $userId,
                     'updated_by'       => $userId,
@@ -218,13 +254,28 @@ class DailyOperationService
                     ]);
                 }
 
+                $eventDate = $this->normalizer->dateString($exception->event_date);
+                $term = $this->academicTermService->resolveForDate($eventDate) ?? $exception->academicTerm;
+
+                if ($term) {
+                    $this->assertRoomSlotAvailable(
+                        eventDate: $eventDate,
+                        term: $term,
+                        roomId: $exception->room_id,
+                        startTime: $this->normalizer->timeString($exception->start_time ?: $exception->schedule?->start_time),
+                        endTime: $this->normalizer->timeString($exception->end_time ?: $exception->schedule?->end_time),
+                        ignoreScheduleId: $exception->schedule_id,
+                        ignoreExceptionId: $exception->id,
+                    );
+                }
+
                 $exception->update([
                     'status'     => 'ongoing',
                     'claimed_at' => now(),
                     'updated_by' => $userId,
                 ]);
 
-                return $this->markExceptionUsage($exception, 'occupied', $userId, actualStart: now());
+                return $this->roomUsageLogService->markExceptionUsage($exception, 'occupied', $userId, actualStart: now());
             }
 
             if (empty($data['schedule_id'])) {
@@ -234,8 +285,20 @@ class DailyOperationService
             }
 
             $schedule = Schedule::findOrFail($data['schedule_id']);
+            $term = $this->academicTermService->resolveForDate($eventDate) ?? $schedule->academicTerm;
 
-            return $this->markScheduleUsage($schedule, $eventDate, 'occupied', $userId, actualStart: now());
+            if ($term) {
+                $this->assertRoomSlotAvailable(
+                    eventDate: $eventDate,
+                    term: $term,
+                    roomId: $schedule->room_id,
+                    startTime: $this->normalizer->timeString($schedule->start_time),
+                    endTime: $this->normalizer->timeString($schedule->end_time),
+                    ignoreScheduleId: $schedule->id,
+                );
+            }
+
+            return $this->roomUsageLogService->markScheduleUsage($schedule, $eventDate, 'occupied', $userId, actualStart: now());
         });
     }
 
@@ -251,7 +314,7 @@ class DailyOperationService
                     'updated_by' => $userId,
                 ]);
 
-                return $this->markExceptionUsage($exception, 'completed', $userId, actualEnd: now());
+                return $this->roomUsageLogService->markExceptionUsage($exception, 'completed', $userId, actualEnd: now());
             }
 
             if (empty($data['schedule_id'])) {
@@ -262,95 +325,307 @@ class DailyOperationService
 
             $schedule = Schedule::findOrFail($data['schedule_id']);
 
-            return $this->markScheduleUsage($schedule, $eventDate, 'completed', $userId, actualEnd: now());
+            return $this->roomUsageLogService->markScheduleUsage($schedule, $eventDate, 'completed', $userId, actualEnd: now());
         });
     }
 
-    public function markScheduleUsage(
+    public function revertStarted(array $data, int $userId): RoomUsageLog
+    {
+        return DB::transaction(function () use ($data, $userId) {
+            $eventDate = Carbon::parse($data['event_date'])->toDateString();
+
+            if (! empty($data['exception_id'])) {
+                $exception = ScheduleException::findOrFail($data['exception_id']);
+                $usageLog = $this->roomUsageLogService->existingExceptionUsageLog($exception);
+
+                $this->assertUsageLogStatus(
+                    usageLog: $usageLog,
+                    allowedStatuses: ['occupied'],
+                    messageKey: 'exception_id',
+                    message: 'Only started classes can have their start action reverted.',
+                );
+
+                $exception->update([
+                    'status'     => 'pending',
+                    'claimed_at' => null,
+                    'updated_by' => $userId,
+                ]);
+
+                return $this->roomUsageLogService->resetToAwaiting($usageLog, $userId);
+            }
+
+            if (empty($data['schedule_id'])) {
+                throw ValidationException::withMessages([
+                    'schedule_id' => 'A schedule or exception is required.',
+                ]);
+            }
+
+            $schedule = Schedule::findOrFail($data['schedule_id']);
+            $usageLog = $this->roomUsageLogService->existingScheduleUsageLog($schedule, $eventDate);
+
+            $this->assertUsageLogStatus(
+                usageLog: $usageLog,
+                allowedStatuses: ['occupied'],
+                messageKey: 'schedule_id',
+                message: 'Only started classes can have their start action reverted.',
+            );
+
+            return $this->roomUsageLogService->resetToAwaiting($usageLog, $userId);
+        });
+    }
+
+    public function revertCompleted(array $data, int $userId): RoomUsageLog
+    {
+        return DB::transaction(function () use ($data, $userId) {
+            $eventDate = Carbon::parse($data['event_date'])->toDateString();
+
+            if (! empty($data['exception_id'])) {
+                $exception = ScheduleException::findOrFail($data['exception_id']);
+                $usageLog = $this->roomUsageLogService->existingExceptionUsageLog($exception);
+
+                $this->assertUsageLogStatus(
+                    usageLog: $usageLog,
+                    allowedStatuses: ['completed'],
+                    messageKey: 'exception_id',
+                    message: 'Only completed classes can have their completion reverted.',
+                );
+
+                $exception->update([
+                    'status'     => 'ongoing',
+                    'claimed_at' => $exception->claimed_at ?: ($usageLog->actual_start ?: now()),
+                    'updated_by' => $userId,
+                ]);
+
+                return $this->roomUsageLogService->reopenCompleted($usageLog, $userId);
+            }
+
+            if (empty($data['schedule_id'])) {
+                throw ValidationException::withMessages([
+                    'schedule_id' => 'A schedule or exception is required.',
+                ]);
+            }
+
+            $schedule = Schedule::findOrFail($data['schedule_id']);
+            $usageLog = $this->roomUsageLogService->existingScheduleUsageLog($schedule, $eventDate);
+
+            $this->assertUsageLogStatus(
+                usageLog: $usageLog,
+                allowedStatuses: ['completed'],
+                messageKey: 'schedule_id',
+                message: 'Only completed classes can have their completion reverted.',
+            );
+
+            return $this->roomUsageLogService->reopenCompleted($usageLog, $userId);
+        });
+    }
+
+    public function revertCancellation(array $data, int $userId): RoomUsageLog
+    {
+        return DB::transaction(function () use ($data, $userId) {
+            $eventDate = Carbon::parse($data['event_date'])->toDateString();
+
+            if (! empty($data['exception_id'])) {
+                $exception = ScheduleException::with('schedule')->findOrFail($data['exception_id']);
+                $eventType = $this->normalizer->enumString($exception->event_type);
+                $exceptionStatus = $this->normalizer->enumString($exception->status);
+
+                if ($eventType === 'cancellation') {
+                    $schedule = $exception->schedule;
+
+                    if (! $schedule) {
+                        throw ValidationException::withMessages([
+                            'exception_id' => 'The cancelled schedule record is no longer available.',
+                        ]);
+                    }
+
+                    $this->assertScheduleCanBeRestored($schedule, $eventDate, $exception->id);
+
+                    $usageLog = $this->roomUsageLogService->existingScheduleUsageLog($schedule, $eventDate)
+                        ?? $this->roomUsageLogService->markScheduleUsage($schedule, $eventDate, 'reserved', $userId);
+
+                    $usageLog = $this->roomUsageLogService->resetToAwaiting($usageLog, $userId);
+                    $exception->delete();
+
+                    return $usageLog;
+                }
+
+                if ($exceptionStatus !== 'cancelled') {
+                    throw ValidationException::withMessages([
+                        'exception_id' => 'Only manually cancelled classes can be restored.',
+                    ]);
+                }
+
+                $this->assertExceptionCanBeRestored($exception);
+
+                $exception->update([
+                    'status'         => 'pending',
+                    'claimed_at'     => null,
+                    'auto_cancel_at' => $this->autoCancelAt(
+                        $this->normalizer->dateString($exception->event_date),
+                        $this->normalizer->timeString($exception->start_time ?: $exception->schedule?->start_time),
+                    ),
+                    'updated_by'     => $userId,
+                ]);
+
+                $usageLog = $this->roomUsageLogService->existingExceptionUsageLog($exception)
+                    ?? $this->roomUsageLogService->markExceptionUsage($exception, 'reserved', $userId);
+
+                return $this->roomUsageLogService->resetToAwaiting($usageLog, $userId);
+            }
+
+            if (empty($data['schedule_id'])) {
+                throw ValidationException::withMessages([
+                    'schedule_id' => 'A schedule or exception is required.',
+                ]);
+            }
+
+            $schedule = Schedule::findOrFail($data['schedule_id']);
+            $cancellationException = ScheduleException::query()
+                ->where('schedule_id', $schedule->id)
+                ->whereDate('event_date', $eventDate)
+                ->where('event_type', 'cancellation')
+                ->first();
+
+            $usageLog = $this->roomUsageLogService->existingScheduleUsageLog($schedule, $eventDate);
+
+            if (! $cancellationException && $this->normalizer->enumString($usageLog?->status) !== 'cancelled') {
+                throw ValidationException::withMessages([
+                    'schedule_id' => 'No cancelled class record was found to restore.',
+                ]);
+            }
+
+            $this->assertScheduleCanBeRestored($schedule, $eventDate, $cancellationException?->id);
+
+            $usageLog ??= $this->roomUsageLogService->markScheduleUsage($schedule, $eventDate, 'reserved', $userId);
+            $usageLog = $this->roomUsageLogService->resetToAwaiting($usageLog, $userId);
+            $cancellationException?->delete();
+
+            return $usageLog;
+        });
+    }
+
+    /**
+     * @param  array<int, string>  $allowedStatuses
+     */
+    private function assertUsageLogStatus(
+        ?RoomUsageLog $usageLog,
+        array $allowedStatuses,
+        string $messageKey,
+        string $message,
+    ): void {
+        if (! $usageLog || ! in_array($this->normalizer->enumString($usageLog->status), $allowedStatuses, true)) {
+            throw ValidationException::withMessages([
+                $messageKey => $message,
+                'usage_log_id' => 'The matching room usage log could not be found in the expected state.',
+            ]);
+        }
+    }
+
+    private function assertScheduleCanBeRestored(
         Schedule $schedule,
         string $eventDate,
-        string $status,
-        int $userId,
-        ?Carbon $actualStart = null,
-        ?Carbon $actualEnd = null,
-    ): RoomUsageLog {
-        $log = RoomUsageLog::query()
-            ->whereDate('usage_date', $eventDate)
-            ->where('source', 'schedule')
-            ->where('schedule_id', $schedule->id)
-            ->first() ?? new RoomUsageLog([
-                'usage_date'     => $eventDate,
-                'source'         => 'schedule',
-                'schedule_id'    => $schedule->id,
-                'room_id'        => $schedule->room_id,
-                'subject_code'   => $schedule->subject_code,
-                'subject_title'  => $schedule->subject_title,
-                'section'        => $schedule->section,
-                'instructor_name'=> $schedule->instructor_name,
-                'expected_start' => $this->timeValue($schedule->start_time),
-                'expected_end'   => $this->timeValue($schedule->end_time),
+        ?int $ignoreExceptionId = null,
+    ): void {
+        $term = $this->academicTermService->resolveForDate($eventDate) ?? $schedule->academicTerm;
+
+        if (! $term) {
+            throw ValidationException::withMessages([
+                'event_date' => 'No academic term is available for the selected date.',
             ]);
-
-        return $this->applyUsageStatus($log, $status, $userId, $actualStart, $actualEnd);
-    }
-
-    public function markExceptionUsage(
-        ScheduleException $exception,
-        string $status,
-        int $userId,
-        ?Carbon $actualStart = null,
-        ?Carbon $actualEnd = null,
-    ): RoomUsageLog {
-        $log = RoomUsageLog::query()
-            ->whereDate('usage_date', $exception->event_date)
-            ->where('source', 'schedule_exception')
-            ->where('schedule_exception_id', $exception->id)
-            ->first() ?? new RoomUsageLog([
-                'usage_date'             => $exception->event_date,
-                'source'                 => 'schedule_exception',
-                'schedule_id'            => $exception->schedule_id,
-                'schedule_exception_id'  => $exception->id,
-                'room_id'                => $exception->room_id,
-                'subject_code'           => $exception->subject_code ?: ($exception->schedule?->subject_code ?? ''),
-                'subject_title'          => $exception->subject_title ?: ($exception->schedule?->subject_title ?? ''),
-                'section'                => $exception->section ?: ($exception->schedule?->section ?? ''),
-                'instructor_name'        => $exception->instructor_name ?: $exception->schedule?->instructor_name,
-                'expected_start'         => $this->timeValue($exception->start_time ?: $exception->schedule?->start_time),
-                'expected_end'           => $this->timeValue($exception->end_time ?: $exception->schedule?->end_time),
-            ]);
-
-        return $this->applyUsageStatus($log, $status, $userId, $actualStart, $actualEnd);
-    }
-
-    private function applyUsageStatus(
-        RoomUsageLog $log,
-        string $status,
-        int $userId,
-        ?Carbon $actualStart = null,
-        ?Carbon $actualEnd = null,
-    ): RoomUsageLog {
-        $log->status = $status;
-        $log->recorded_by = $userId;
-
-        if ($actualStart) {
-            $log->actual_start = $actualStart;
         }
 
-        if ($actualEnd) {
-            $log->actual_end = $actualEnd;
+        $this->assertRoomSlotAvailable(
+            eventDate: $eventDate,
+            term: $term,
+            roomId: $schedule->room_id,
+            startTime: $this->normalizer->timeString($schedule->start_time),
+            endTime: $this->normalizer->timeString($schedule->end_time),
+            ignoreScheduleId: $schedule->id,
+            ignoreExceptionId: $ignoreExceptionId,
+        );
+    }
 
-            if (! $log->actual_start) {
-                $log->actual_start = $actualEnd;
+    private function assertExceptionCanBeRestored(ScheduleException $exception): void
+    {
+        $eventDate = $this->normalizer->dateString($exception->event_date);
+        $term = $this->academicTermService->resolveForDate($eventDate) ?? $exception->academicTerm;
+
+        if (! $term) {
+            throw ValidationException::withMessages([
+                'event_date' => 'No academic term is available for the selected date.',
+            ]);
+        }
+
+        $this->assertRoomSlotAvailable(
+            eventDate: $eventDate,
+            term: $term,
+            roomId: $exception->room_id,
+            startTime: $this->normalizer->timeString($exception->start_time ?: $exception->schedule?->start_time),
+            endTime: $this->normalizer->timeString($exception->end_time ?: $exception->schedule?->end_time),
+            ignoreScheduleId: $exception->schedule_id,
+            ignoreExceptionId: $exception->id,
+        );
+    }
+
+
+
+    /**
+     * Change-room actions do not expose a custom start time in the UI because
+     * they normally reuse the selected class window. When the target room is
+     * blocked only by an unclaimed regular class, the request should claim the
+     * remaining reclaimable time instead of failing against the protected claim
+     * window. This does not create an unclaimed usage log and does not edit the
+     * weekly schedule template.
+     */
+    private function effectiveRoomChangeStartTime(
+        string $eventDate,
+        AcademicTerm $term,
+        int $roomId,
+        string $startTime,
+        string $endTime,
+        ?int $ignoreScheduleId = null,
+    ): string {
+        $startTime = $this->normalizer->timeString($startTime);
+        $endTime = $this->normalizer->timeString($endTime);
+        $dayOfWeek = Carbon::parse($eventDate)->dayOfWeekIso;
+        $replacedScheduleIds = $this->replacedScheduleIdsForDate($eventDate, $term->id);
+        $effectiveStartTime = $startTime;
+
+        $scheduleConflicts = Schedule::query()
+            ->active()
+            ->where('academic_term_id', $term->id)
+            ->where('room_id', $roomId)
+            ->where('day_of_week', $dayOfWeek)
+            ->where('start_time', '<', $endTime)
+            ->where('end_time', '>', $startTime)
+            ->when($ignoreScheduleId, fn ($query) => $query->whereKeyNot($ignoreScheduleId))
+            ->when($replacedScheduleIds->isNotEmpty(), fn ($query) => $query->whereNotIn('id', $replacedScheduleIds))
+            ->orderBy('start_time')
+            ->get();
+
+        foreach ($scheduleConflicts as $scheduleConflict) {
+            [$conflictStart, $conflictEnd, $windowState] = $this->effectiveScheduleWindow($scheduleConflict, $eventDate);
+
+            if ($windowState !== 'unclaimed') {
+                continue;
             }
+
+            if ($conflictStart > $effectiveStartTime || $conflictEnd <= $effectiveStartTime) {
+                continue;
+            }
+
+            $effectiveStartTime = $conflictEnd;
         }
 
-        if (in_array($status, ['cancelled', 'auto_cancelled'], true)) {
-            $log->actual_end = $log->actual_end ?: now();
+        if ($effectiveStartTime >= $endTime) {
+            throw ValidationException::withMessages([
+                'room_id' => 'The selected room is only reclaimable after this class has already ended. Choose another room or time.',
+                'start_time' => 'The remaining reclaimable time must start before the class end time.',
+                'end_time' => 'The remaining reclaimable time must start before the class end time.',
+            ]);
         }
 
-        $log->save();
-
-        return $log;
+        return $effectiveStartTime;
     }
 
     private function assertRoomSlotAvailable(
@@ -362,8 +637,8 @@ class DailyOperationService
         ?int $ignoreScheduleId = null,
         ?int $ignoreExceptionId = null,
     ): void {
-        $startTime = $this->timeValue($startTime);
-        $endTime = $this->timeValue($endTime);
+        $startTime = $this->normalizer->timeString($startTime);
+        $endTime = $this->normalizer->timeString($endTime);
         $dayOfWeek = Carbon::parse($eventDate)->dayOfWeekIso;
 
         if ($startTime >= $endTime) {
@@ -395,15 +670,21 @@ class DailyOperationService
             ->get();
 
         foreach ($scheduleConflicts as $scheduleConflict) {
-            [$effectiveStart, $effectiveEnd, $wasTrimmed] = $this->effectiveScheduleWindow($scheduleConflict, $eventDate);
+            [$effectiveStart, $effectiveEnd, $windowState] = $this->effectiveScheduleWindow($scheduleConflict, $eventDate);
 
             if (! $this->timeWindowsOverlap($startTime, $endTime, $effectiveStart, $effectiveEnd)) {
                 continue;
             }
 
+            $conflictType = match ($windowState) {
+                'completed' => 'completed regular class',
+                'unclaimed' => 'regular class claim window',
+                default => 'regular class',
+            };
+
             $this->throwSlotConflict(
                 roomLabel: $this->roomLabel($roomId),
-                conflictType: $wasTrimmed ? 'completed regular class' : 'regular class',
+                conflictType: $conflictType,
                 subjectCode: $scheduleConflict->subject_code ?? 'Class',
                 startTime: $effectiveStart,
                 endTime: $effectiveEnd,
@@ -426,7 +707,7 @@ class DailyOperationService
             ->get();
 
         foreach ($exceptionConflicts as $exceptionConflict) {
-            [$effectiveStart, $effectiveEnd, $wasTrimmed] = $this->effectiveExceptionWindow($exceptionConflict);
+            [$effectiveStart, $effectiveEnd, $windowState] = $this->effectiveExceptionWindow($exceptionConflict);
 
             if (! $this->timeWindowsOverlap($startTime, $endTime, $effectiveStart, $effectiveEnd)) {
                 continue;
@@ -434,7 +715,7 @@ class DailyOperationService
 
             $this->throwSlotConflict(
                 roomLabel: $this->roomLabel($roomId),
-                conflictType: ($wasTrimmed ? 'completed ' : '') . str_replace('_', ' ', $this->enumValue($exceptionConflict->event_type)),
+                conflictType: ($windowState === 'completed' ? 'completed ' : '') . str_replace('_', ' ', $this->normalizer->enumString($exceptionConflict->event_type)),
                 subjectCode: $exceptionConflict->subject_code ?: ($exceptionConflict->schedule?->subject_code ?? 'Class'),
                 startTime: $effectiveStart,
                 endTime: $effectiveEnd,
@@ -445,17 +726,17 @@ class DailyOperationService
     /**
      * Returns the conflict window that should still block same-day class requests.
      *
-     * If a scheduled class has already been completed and its actual end is before
-     * the expected end, the remaining room time is free for another valid class
-     * request. The original schedule row is not edited; only the same-day conflict
-     * check is shortened by the usage log.
+     * Completed classes only block until actual_end. Unclaimed regular classes
+     * only block until their claim deadline; after that deadline the remaining
+     * time can be reclaimed by a special/makeup/change-room operation without
+     * writing an "unclaimed" usage-log row for the original schedule.
      *
-     * @return array{0:string,1:string,2:bool}
+     * @return array{0:string,1:string,2:string|null}
      */
     private function effectiveScheduleWindow(Schedule $schedule, string $eventDate): array
     {
-        $startTime = $this->timeValue($schedule->start_time);
-        $endTime = $this->timeValue($schedule->end_time);
+        $startTime = $this->normalizer->timeString($schedule->start_time);
+        $endTime = $this->normalizer->timeString($schedule->end_time);
 
         $usageLog = RoomUsageLog::query()
             ->whereDate('usage_date', $eventDate)
@@ -463,16 +744,26 @@ class DailyOperationService
             ->where('schedule_id', $schedule->id)
             ->first();
 
-        return $this->trimWindowByCompletedUsageLog($startTime, $endTime, $usageLog);
+        [$effectiveStart, $effectiveEnd, $windowState] = $this->trimWindowByCompletedUsageLog($startTime, $endTime, $usageLog);
+
+        if ($windowState !== null) {
+            return [$effectiveStart, $effectiveEnd, $windowState];
+        }
+
+        if ($this->scheduleIsUnclaimed($eventDate, $startTime, $endTime, $usageLog)) {
+            return [$startTime, $this->claimDeadlineTime($eventDate, $startTime), 'unclaimed'];
+        }
+
+        return [$startTime, $endTime, null];
     }
 
     /**
-     * @return array{0:string,1:string,2:bool}
+     * @return array{0:string,1:string,2:string|null}
      */
     private function effectiveExceptionWindow(ScheduleException $exception): array
     {
-        $startTime = $this->timeValue($exception->start_time ?: $exception->schedule?->start_time);
-        $endTime = $this->timeValue($exception->end_time ?: $exception->schedule?->end_time);
+        $startTime = $this->normalizer->timeString($exception->start_time ?: $exception->schedule?->start_time);
+        $endTime = $this->normalizer->timeString($exception->end_time ?: $exception->schedule?->end_time);
 
         $usageLog = RoomUsageLog::query()
             ->whereDate('usage_date', $exception->event_date)
@@ -484,25 +775,67 @@ class DailyOperationService
     }
 
     /**
-     * @return array{0:string,1:string,2:bool}
+     * @return array{0:string,1:string,2:string|null}
      */
     private function trimWindowByCompletedUsageLog(string $startTime, string $endTime, ?RoomUsageLog $usageLog): array
     {
-        if (! $usageLog || $this->enumValue($usageLog->status) !== 'completed' || ! $usageLog->actual_end) {
-            return [$startTime, $endTime, false];
+        if (! $usageLog) {
+            return [$startTime, $endTime, null];
         }
 
-        $actualEnd = $this->timeValue($usageLog->actual_end);
+        $status = $this->normalizer->enumString($usageLog->status);
+
+        if (in_array($status, ['cancelled', 'auto_cancelled'], true)) {
+            return [$startTime, $startTime, $status];
+        }
+
+        if ($status !== 'completed' || ! $usageLog->actual_end) {
+            return [$startTime, $endTime, null];
+        }
+
+        $actualEnd = $this->normalizer->timeString($usageLog->actual_end);
 
         if ($actualEnd <= $startTime) {
-            return [$startTime, $startTime, true];
+            return [$startTime, $startTime, 'completed'];
         }
 
         if ($actualEnd < $endTime) {
-            return [$startTime, $actualEnd, true];
+            return [$startTime, $actualEnd, 'completed'];
         }
 
-        return [$startTime, $endTime, false];
+        return [$startTime, $endTime, null];
+    }
+
+    private function scheduleIsUnclaimed(string $eventDate, string $startTime, string $endTime, ?RoomUsageLog $usageLog): bool
+    {
+        $claimDeadline = $this->claimDeadlineAt($eventDate, $startTime);
+        $scheduleEnd = Carbon::parse("{$eventDate} {$endTime}");
+
+        if ($claimDeadline->greaterThanOrEqualTo($scheduleEnd)) {
+            return false;
+        }
+
+        if (now()->lessThan($claimDeadline)) {
+            return false;
+        }
+
+        $status = $this->normalizer->enumString($usageLog?->status);
+
+        if ($status !== '' && ! in_array($status, ['reserved'], true)) {
+            return false;
+        }
+
+        return ! $usageLog || (! $usageLog->actual_start && ! $usageLog->actual_end);
+    }
+
+    private function claimDeadlineAt(string $eventDate, string $startTime): Carbon
+    {
+        return Carbon::parse("{$eventDate} {$startTime}")->addMinutes($this->claimGraceMinutes());
+    }
+
+    private function claimDeadlineTime(string $eventDate, string $startTime): string
+    {
+        return $this->claimDeadlineAt($eventDate, $startTime)->format('H:i');
     }
 
     private function timeWindowsOverlap(string $firstStart, string $firstEnd, string $secondStart, string $secondEnd): bool
@@ -535,7 +868,7 @@ class DailyOperationService
             return;
         }
 
-        $status = $this->enumValue($overrideConflict->status);
+        $status = $this->normalizer->enumString($overrideConflict->status);
         $label = ucfirst(str_replace('_', ' ', $status));
         $startsAt = Carbon::parse($overrideConflict->starts_at)->format('g:i A');
         $endsAt = $overrideConflict->ends_at
@@ -595,40 +928,9 @@ class DailyOperationService
         return trim("{$room->code} {$room->name}");
     }
 
-    private function enumValue(mixed $value): string
-    {
-        return $value instanceof \BackedEnum ? $value->value : (string) $value;
-    }
-
-    private function resolveTermForDate(string $date): ?AcademicTerm
-    {
-        return AcademicTerm::query()
-            ->where(function ($query) use ($date) {
-                $query->whereNull('starts_on')
-                    ->orWhereDate('starts_on', '<=', $date);
-            })
-            ->where(function ($query) use ($date) {
-                $query->whereNull('ends_on')
-                    ->orWhereDate('ends_on', '>=', $date);
-            })
-            ->orderByDesc('is_current')
-            ->orderByDesc('is_active')
-            ->latest('id')
-            ->first()
-            ?? AcademicTerm::current()->first();
-    }
-
     private function autoCancelAt(string $eventDate, string $startTime): Carbon
     {
-        return Carbon::parse("{$eventDate} {$startTime}")->addHour();
+        return $this->claimDeadlineAt($eventDate, $startTime);
     }
 
-    private function timeValue(mixed $value): string
-    {
-        if ($value instanceof Carbon) {
-            return $value->format('H:i');
-        }
-
-        return substr((string) $value, 0, 5);
-    }
 }

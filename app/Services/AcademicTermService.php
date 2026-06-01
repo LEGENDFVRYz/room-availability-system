@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\AcademicTerm;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class AcademicTermService
@@ -18,6 +19,28 @@ class AcademicTermService
     public function getCurrent(): ?AcademicTerm
     {
         return AcademicTerm::current()->first();
+    }
+
+    public function resolveForDate(string|Carbon $date): ?AcademicTerm
+    {
+        $selectedDate = $date instanceof Carbon
+            ? $date->toDateString()
+            : Carbon::parse($date)->toDateString();
+
+        return AcademicTerm::query()
+            ->where(function ($query) use ($selectedDate) {
+                $query->whereNull('starts_on')
+                    ->orWhereDate('starts_on', '<=', $selectedDate);
+            })
+            ->where(function ($query) use ($selectedDate) {
+                $query->whereNull('ends_on')
+                    ->orWhereDate('ends_on', '>=', $selectedDate);
+            })
+            ->orderByDesc('is_current')
+            ->orderByDesc('is_active')
+            ->latest('id')
+            ->first()
+            ?? $this->getCurrent();
     }
 
     public function create(array $data): AcademicTerm

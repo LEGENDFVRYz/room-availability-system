@@ -41,7 +41,7 @@ function dismiss() {
         >
             <div
                 v-if="toast"
-                class="fixed bottom-6 right-6 z-50 w-80 overflow-hidden rounded-xl border bg-white shadow-xl"
+                class="fixed bottom-6 right-6 z-[200] w-80 overflow-hidden rounded-xl border bg-white shadow-xl"
                 :class="toast.type === 'success' ? 'border-green-200' : 'border-red-200'"
             >
                 <!-- Content -->

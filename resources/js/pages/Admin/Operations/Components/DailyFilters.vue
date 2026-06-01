@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { CheckCircle2, ChevronDown, LayoutGrid, Table2 } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import AdminFilterField from '@/components/AdminFilterField.vue';
+import AdminFilterPanel from '@/components/AdminFilterPanel.vue';
+import RoomMultiSelect from '@/components/RoomMultiSelect.vue';
+import { LayoutGrid, Table2 } from 'lucide-vue-next';
 import type { DailySlotType, Room, ViewMode } from './type';
 
 const props = defineProps<{
@@ -19,34 +21,8 @@ const emit = defineEmits<{
     'date-change': [];
 }>();
 
-const isRoomFilterOpen = ref(false);
-
-const selectedRoomLabel = computed(() => {
-    if (props.selectedRoomIds.length === 0) return 'All rooms';
-
-    if (props.selectedRoomIds.length === 1) {
-        return props.rooms.find((room) => room.id === props.selectedRoomIds[0])?.code ?? '1 room selected';
-    }
-
-    return `${props.selectedRoomIds.length} rooms selected`;
-});
-
-function toggleRoomSelection(roomId: number) {
-    if (props.selectedRoomIds.includes(roomId)) {
-        emit('update:selectedRoomIds', props.selectedRoomIds.filter((id) => id !== roomId));
-        return;
-    }
-
-    emit('update:selectedRoomIds', [...props.selectedRoomIds, roomId]);
-}
-
-function clearRoomSelection() {
-    emit('update:selectedRoomIds', []);
-}
-
-function isRoomSelected(roomId: number) {
-    return props.selectedRoomIds.includes(roomId);
-}
+const filterControlClass =
+    'h-11 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium normal-case tracking-normal text-gray-700 shadow-sm outline-none transition focus:border-pup-maroon focus:ring-2 focus:ring-pup-maroon/15';
 
 function onDateInput(event: Event) {
     emit('update:selectedDate', (event.target as HTMLInputElement).value);
@@ -54,73 +30,33 @@ function onDateInput(event: Event) {
 </script>
 
 <template>
-    <div class="relative z-[70] rounded-xl border border-gray-200 bg-white p-4 shadow-sm" @click="isRoomFilterOpen = false">
+    <AdminFilterPanel>
         <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div class="grid flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <label class="flex flex-col gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Date
+                <AdminFilterField label="Date">
                     <input
                         :value="selectedDate"
                         type="date"
+                        :class="filterControlClass"
                         @input="onDateInput"
                         @change="emit('date-change')"
-                        class="h-11 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 shadow-sm transition focus:border-pup-maroon focus:ring-2 focus:ring-pup-maroon/15"
                     />
-                </label>
+                </AdminFilterField>
 
-                <div class="relative flex flex-col gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Room
-                    <button
-                        type="button"
-                        @click.stop="isRoomFilterOpen = !isRoomFilterOpen"
-                        class="flex h-11 items-center justify-between rounded-xl border border-gray-200 bg-white px-3 text-left text-sm font-medium normal-case tracking-normal text-gray-700 shadow-sm transition hover:border-pup-maroon/40 focus:border-pup-maroon focus:outline-none focus:ring-2 focus:ring-pup-maroon/15"
-                    >
-                        <span>{{ selectedRoomLabel }}</span>
-                        <ChevronDown class="h-4 w-4 text-gray-400" />
-                    </button>
+                <RoomMultiSelect
+                    :model-value="selectedRoomIds"
+                    :rooms="rooms"
+                    label="Room"
+                    all-label="All rooms"
+                    select-label="Select rooms"
+                    @update:model-value="emit('update:selectedRoomIds', $event)"
+                />
 
-                    <div
-                        v-if="isRoomFilterOpen"
-                        class="absolute left-0 top-full z-[90] mt-2 w-full min-w-[280px] overflow-hidden rounded-xl border border-pup-maroon/15 bg-white shadow-2xl ring-1 ring-black/5"
-                        @click.stop
-                    >
-                        <div class="flex items-center justify-between border-b border-gray-100 px-3 py-2">
-                            <span class="text-xs font-semibold uppercase tracking-wide text-gray-500">Select rooms</span>
-                            <button
-                                type="button"
-                                @click="clearRoomSelection"
-                                class="text-xs font-semibold normal-case tracking-normal text-pup-maroon hover:underline"
-                            >
-                                All rooms
-                            </button>
-                        </div>
-                        <div class="max-h-64 overflow-y-auto p-1.5 [scrollbar-color:theme(colors.pup.gray-400)_transparent]">
-                            <button
-                                v-for="room in rooms"
-                                :key="room.id"
-                                type="button"
-                                @click="toggleRoomSelection(room.id)"
-                                class="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm normal-case tracking-normal transition hover:bg-pup-maroon-pale/70"
-                                :class="isRoomSelected(room.id) ? 'bg-pup-maroon-pale text-pup-maroon' : 'text-gray-700'"
-                            >
-                                <span class="font-mono font-semibold">{{ room.code }}</span>
-                                <span
-                                    class="flex h-4 w-4 items-center justify-center rounded border"
-                                    :class="isRoomSelected(room.id) ? 'border-pup-maroon bg-pup-maroon text-white' : 'border-gray-300 bg-white'"
-                                >
-                                    <CheckCircle2 v-if="isRoomSelected(room.id)" class="h-3 w-3" />
-                                </span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <label class="flex flex-col gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    Type
+                <AdminFilterField label="Type">
                     <select
                         :value="selectedType"
+                        :class="filterControlClass"
                         @change="emit('update:selectedType', ($event.target as HTMLSelectElement).value as 'all' | DailySlotType)"
-                        class="h-11 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium normal-case tracking-normal text-gray-700 shadow-sm transition focus:border-pup-maroon focus:ring-2 focus:ring-pup-maroon/15"
                     >
                         <option value="all">All types</option>
                         <option value="regular">Regular</option>
@@ -132,7 +68,7 @@ function onDateInput(event: Event) {
                         <option value="unavailable">Unavailable</option>
                         <option value="reserved">Reserved</option>
                     </select>
-                </label>
+                </AdminFilterField>
             </div>
 
             <div class="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-1">
@@ -156,5 +92,5 @@ function onDateInput(event: Event) {
                 </button>
             </div>
         </div>
-    </div>
+    </AdminFilterPanel>
 </template>

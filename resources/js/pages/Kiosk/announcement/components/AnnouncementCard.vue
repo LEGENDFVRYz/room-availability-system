@@ -6,7 +6,8 @@ type AnnouncementType =
     | 'room_change'
     | 'special_class'
     | 'room_maintenance'
-    | 'room_reserved';
+    | 'room_reserved'
+    | 'general';
 
 type NoticeDesign = 'general' | 'exception' | 'override';
 

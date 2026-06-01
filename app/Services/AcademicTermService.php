@@ -28,6 +28,31 @@ class AcademicTermService
         return AcademicTerm::current()->first();
     }
 
+
+    public function getCurrentOrActive(string|Carbon|null $date = null): ?AcademicTerm
+    {
+        $current = $this->getCurrent();
+
+        if ($current) {
+            return $current;
+        }
+
+        if ($date) {
+            $resolved = $this->resolveForDate($date);
+
+            if ($resolved) {
+                return $resolved;
+            }
+        }
+
+        return AcademicTerm::query()
+            ->where('is_active', true)
+            ->orderByDesc('year_start')
+            ->orderByDesc('semester')
+            ->latest('id')
+            ->first();
+    }
+
     public function resolveForDate(string|Carbon $date): ?AcademicTerm
     {
         $selectedDate = $date instanceof Carbon

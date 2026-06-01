@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\FloorStatusController;
 use App\Http\Controllers\Api;
 use App\Http\Controllers\Kiosk;
 use App\Http\Controllers\Kiosk\DashboardController;
+use App\Http\Controllers\Kiosk\ScheduleController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -24,9 +25,7 @@ Route::prefix('kiosk')->name('kiosk.')->group(function () {
     Route::get('/dashboard/floor-status', [FloorStatusController::class, 'index'])->name('dashboard.floor-status');
 
     # Schedules
-    Route::get('/schedules', function () {
-        return Inertia::render('Kiosk/schedule/index'); // <-- Semicolon added here
-    })->name('announcements');
+    Route::get('/schedules', [ScheduleController::class, 'index'])->name('schedule');
 
     # Annoucements
     Route::get('/announcements', [Kiosk\AnnouncementController::class, 'index'])->name('announcements');

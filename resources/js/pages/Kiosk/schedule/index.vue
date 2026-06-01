@@ -7,7 +7,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 import DailyFilters from '@/pages/Admin/Operations/Components/DailyFilters.vue';
 import DailyRoomGrid from '@/pages/Admin/Operations/Components/DailyRoomGrid.vue';
-import ScheduleSlotModal from './components/ScheduleSlotModal.vue';
+import ScheduleSlotModal from './Components/ScheduleSlotModal.vue';
 import DailyTableView from '@/pages/Admin/Operations/Components/DailyTableView.vue';
 import type { CurrentTerm, DailySlot, DailySlotType, Room, SharedProps, ViewMode } from '@/pages/Admin/Operations/Components/type';
 
@@ -16,6 +16,7 @@ interface Props {
     rooms?: Room[];
     daily_schedules?: DailySlot[];
     selected_date?: string;
+    operation_term_id?: number | null;
     claim_grace_minutes?: number;
 }
 
@@ -28,12 +29,15 @@ const props = withDefaults(defineProps<Props>(), {
 
 const page = usePage<SharedProps>();
 const currentTerm = computed(() => page.props.currentTerm ?? props.currentTerm ?? null);
+const hasOperationTerm = computed(() => Boolean(props.operation_term_id ?? currentTerm.value?.id));
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Schedule', href: '/schedule' }];
+const scheduleEndpoint = '/kiosk/schedules/';
+
+const breadcrumbs: BreadcrumbItem[] = [{ title: 'Schedule', href: scheduleEndpoint }];
 
 const pageheader: PageHeader = {
     title: 'Schedule',
-    desc: 'View today\'s room schedules, class details, cancellations, room changes, and room status updates.',
+    desc: "View today's room schedules, class details, cancellations, room changes, and room status updates.",
 };
 
 const selectedDate = ref(props.selected_date || todayIso());
@@ -45,6 +49,8 @@ const claimGraceMinutes = computed(() => Math.max(1, Number(props.claim_grace_mi
 const currentDateTime = ref(new Date());
 const lastUpdatedAt = ref(new Date());
 let clockTimer: number | undefined;
+let reloadTimer: number | undefined;
+const isRefreshing = ref(false);
 
 const rooms = computed<Room[]>(() => props.rooms);
 const sourceSlots = computed<DailySlot[]>(() => props.daily_schedules);
@@ -175,17 +181,34 @@ const lastUpdatedLabel = computed(() => {
 });
 
 function refreshSchedule() {
-    window.location.reload();
+    if (isRefreshing.value) return;
+
+    isRefreshing.value = true;
+
+    router.reload({
+        only: ['rooms', 'daily_schedules', 'selected_date', 'operation_term_id', 'claim_grace_minutes'],
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => {
+            lastUpdatedAt.value = new Date();
+        },
+        onFinish: () => {
+            isRefreshing.value = false;
+        },
+    });
 }
 
 function goToSelectedDate() {
     router.get(
-        '/schedule',
+        scheduleEndpoint,
         { selected_date: selectedDate.value },
         {
             preserveScroll: true,
             preserveState: false,
             replace: true,
+            onSuccess: () => {
+                lastUpdatedAt.value = new Date();
+            },
         },
     );
 }
@@ -285,11 +308,19 @@ onMounted(() => {
     clockTimer = window.setInterval(() => {
         currentDateTime.value = new Date();
     }, 1000);
+
+    reloadTimer = window.setInterval(() => {
+        refreshSchedule();
+    }, 15000);
 });
 
 onUnmounted(() => {
     if (clockTimer) {
         window.clearInterval(clockTimer);
+    }
+
+    if (reloadTimer) {
+        window.clearInterval(reloadTimer);
     }
 });
 </script>
@@ -300,7 +331,7 @@ onUnmounted(() => {
     <AppLayout :breadcrumbs="breadcrumbs" :pageheader="pageheader">
         <div class="flex flex-col gap-5">
             <div
-                v-if="!currentTerm"
+                v-if="!hasOperationTerm"
                 class="flex items-start gap-3 rounded-xl border border-pup-gold/40 bg-pup-gold-pale/70 px-4 py-3 text-sm text-pup-maroon-dark"
             >
                 <AlertCircle class="mt-0.5 h-4 w-4 shrink-0 text-pup-gold-dark" />
@@ -324,7 +355,7 @@ onUnmounted(() => {
                                 Schedule:
                                 <span class="text-pup-gold-light">{{ selectedDateLabel }}</span>
                             </p>
-                            <p class="mt-1 text-sm text-white/70">View today\'s classes, room changes, cancellations, and room status updates.</p>
+                            <p class="mt-1 text-sm text-white/70">View today's classes, room changes, cancellations, and room status updates.</p>
                         </div>
                     </div>
 
@@ -337,10 +368,11 @@ onUnmounted(() => {
 
                         <button
                             type="button"
+                            :disabled="isRefreshing"
                             @click="refreshSchedule"
-                            class="inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs font-bold text-pup-maroon shadow-sm transition hover:bg-pup-gold-pale"
+                            class="inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs font-bold text-pup-maroon shadow-sm transition hover:bg-pup-gold-pale disabled:cursor-not-allowed disabled:opacity-70"
                         >
-                            <RefreshCw class="h-3.5 w-3.5" />
+                            <RefreshCw class="h-3.5 w-3.5" :class="isRefreshing ? 'animate-spin' : ''" />
                             Refresh
                         </button>
 
@@ -364,7 +396,7 @@ onUnmounted(() => {
                     <p class="text-xs font-semibold uppercase tracking-wide text-pup-maroon">Reserved Now</p>
                     <p class="mt-2 text-2xl font-bold text-pup-maroon-deep">
                         {{ summaryStats.reservedNowCount }}
-                        <span class="text-base font-semibold">({{ summaryStats.upcomingSoonCount }} soon)</span>
+                        <span v-if="summaryStats.upcomingSoonCount" class="text-base font-semibold">({{ summaryStats.upcomingSoonCount }} soon)</span>
                     </p>
                     <p class="text-xs text-pup-maroon/70">classes waiting to start</p>
                 </div>
@@ -378,7 +410,7 @@ onUnmounted(() => {
                 <div class="rounded-xl border border-orange-100 bg-orange-50/70 p-4 shadow-sm">
                     <p class="text-xs font-semibold uppercase tracking-wide text-orange-600">Daily Changes</p>
                     <p class="mt-2 text-2xl font-bold text-orange-800">{{ summaryStats.exceptionCount }}</p>
-                    <p class="text-xs text-orange-600">cancellations, room changes, and special classes</p>
+                    <p class="text-xs text-orange-600">cancellations, changes, and special classes</p>
                 </div>
             </div>
 

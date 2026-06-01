@@ -114,7 +114,7 @@ const STATUS_CARDS = [
     {
         key: 'available' as const,
         label: 'Available Now',
-        sub: 'rooms without active class',
+        sub: 'selected rooms without active class',
         accent: 'border-l-status-available',
         iconCls: 'text-status-available',
         bgCls: 'bg-status-available-bg',
@@ -122,7 +122,7 @@ const STATUS_CARDS = [
     },
     {
         key: 'reserved' as const,
-        label: 'Reserved (Upcoming)',
+        label: 'Reserved Now',
         sub: 'classes waiting to claim',
         accent: 'border-l-status-reserved',
         iconCls: 'text-status-reserved',
@@ -173,8 +173,6 @@ const quickActionsWithIcons = computed(() => {
 });
 
 const safeScheduleHealth = computed(() => props.scheduleHealth ?? []);
-const safeActivityFeed = computed(() => props.activityFeed ?? []);
-
 const todayLabel = computed(() =>
     new Date().toLocaleDateString('en-US', {
         month: 'short',
@@ -186,13 +184,53 @@ const todayLabel = computed(() =>
 const activityTypeMap: Record<string, { dot: string; label: string; text: string; bg: string }> = {
     reserved: { dot: 'bg-status-reserved', label: 'Reserved', text: 'text-status-reserved', bg: 'bg-status-reserved-bg' },
     cancelled: { dot: 'bg-status-occupied', label: 'Cancelled', text: 'text-status-occupied', bg: 'bg-status-occupied-bg' },
-    change: { dot: 'bg-status-notice', label: 'Change', text: 'text-status-notice', bg: 'bg-status-notice-bg' },
-    import: { dot: 'bg-pup-gold', label: 'Import', text: 'text-pup-gold-dark', bg: 'bg-pup-gold-pale' },
+    change: { dot: 'bg-status-notice', label: 'Room Change', text: 'text-status-notice', bg: 'bg-status-notice-bg' },
+    schedule_update: { dot: 'bg-pup-gold', label: 'Schedule Update', text: 'text-pup-gold-dark', bg: 'bg-pup-gold-pale' },
+    academic_term: { dot: 'bg-pup-maroon', label: 'Academic Term', text: 'text-pup-maroon', bg: 'bg-pup-maroon-pale' },
     maintenance: { dot: 'bg-status-warning', label: 'Maintenance', text: 'text-status-warning', bg: 'bg-status-warning-bg' },
+    special: { dot: 'bg-status-notice', label: 'Special Class', text: 'text-status-notice', bg: 'bg-status-notice-bg' },
     notice: { dot: 'bg-pup-gray-400', label: 'Notice', text: 'text-pup-gray-600', bg: 'bg-pup-gray-100' },
 };
 
 const fallbackActivityType = activityTypeMap.notice;
+
+const normalizeActivityType = (type: string | null | undefined): keyof typeof activityTypeMap => {
+    switch ((type ?? '').toLowerCase()) {
+        case 'room_reserved':
+        case 'reserved':
+            return 'reserved';
+        case 'class_cancellation':
+        case 'cancelled':
+        case 'cancellation':
+            return 'cancelled';
+        case 'room_change':
+        case 'change':
+            return 'change';
+        case 'schedule_update':
+        case 'import':
+            return 'schedule_update';
+        case 'academic_term':
+            return 'academic_term';
+        case 'room_maintenance':
+        case 'maintenance':
+        case 'unavailable':
+            return 'maintenance';
+        case 'special_class':
+        case 'makeup_class':
+        case 'special':
+            return 'special';
+        default:
+            return 'notice';
+    }
+};
+
+const safeActivityFeed = computed(() =>
+    (props.activityFeed ?? []).map((item) => ({
+        ...item,
+        type: normalizeActivityType(item.type),
+    })),
+);
+
 
 const clampPercent = (value: number | null | undefined): number => {
     const percent = Number(value ?? 0);

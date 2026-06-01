@@ -7,6 +7,13 @@ use Illuminate\Database\Eloquent\Collection;
 
 class RoomService
 {
+    private readonly NoticeService $noticeService;
+
+    public function __construct(?NoticeService $noticeService = null)
+    {
+        $this->noticeService = $noticeService ?? app(NoticeService::class);
+    }
+
     public function getAll(): Collection
     {
         return Room::orderBy('display_order')
@@ -25,8 +32,12 @@ class RoomService
         return $room->fresh();
     }
 
-    public function deactivate(Room $room): void
+    public function deactivate(Room $room, ?int $userId = null): void
     {
+        $this->noticeService->deactivateRoomScopedNotices($room->id, $userId);
+
         $room->update(['is_active' => false]);
+
+        $this->noticeService->announceRoomDeactivated($room->fresh(), $userId);
     }
 }

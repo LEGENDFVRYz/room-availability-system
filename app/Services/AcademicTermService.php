@@ -9,6 +9,13 @@ use Illuminate\Support\Facades\DB;
 
 class AcademicTermService
 {
+    private readonly NoticeService $noticeService;
+
+    public function __construct(?NoticeService $noticeService = null)
+    {
+        $this->noticeService = $noticeService ?? app(NoticeService::class);
+    }
+
     public function getAll(): Collection
     {
         return AcademicTerm::orderByDesc('year_start')
@@ -55,22 +62,24 @@ class AcademicTermService
         ]);
     }
 
-    public function setAsCurrent(AcademicTerm $term): void
+    public function setAsCurrent(AcademicTerm $term, ?int $userId = null): void
     {
         DB::transaction(function () use ($term) {
             AcademicTerm::where('is_current', true)->update(['is_current' => false]);
             $term->update(['is_current' => true]);
         });
+
+        $this->noticeService->announceAcademicTermSet($term->refresh(), $userId);
     }
 
-    public function findOrCreateAndSetCurrent(int $yearStart, int $semester): AcademicTerm
+    public function findOrCreateAndSetCurrent(int $yearStart, int $semester, ?int $userId = null): AcademicTerm
     {
         $term = AcademicTerm::firstOrCreate(
             ['year_start' => $yearStart, 'semester' => $semester],
             ['is_current' => false, 'is_active' => true],
         );
 
-        $this->setAsCurrent($term);
+        $this->setAsCurrent($term, $userId);
 
         return $term;
     }

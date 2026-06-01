@@ -8,6 +8,13 @@ use App\Models\Schedule;
 
 class ScheduleService
 {
+    private readonly NoticeService $noticeService;
+
+    public function __construct(?NoticeService $noticeService = null)
+    {
+        $this->noticeService = $noticeService ?? app(NoticeService::class);
+    }
+
     private const COLORS = [
         'blue', 'rose', 'green', 'orange', 'teal', 'violet', 'yellow', 'purple',
     ];
@@ -149,7 +156,7 @@ class ScheduleService
             return ['conflict' => true];
         }
 
-        Schedule::create([
+        $schedule = Schedule::create([
             'academic_term_id' => $termId,
             'room_id'          => $validated['room_id'],
             'subject_code'     => $validated['subject_code'],
@@ -164,7 +171,9 @@ class ScheduleService
             'updated_by'       => $userId,
         ]);
 
-        return ['conflict' => false];
+        $this->noticeService->announceScheduleUpdated($schedule, 'created', $userId);
+
+        return ['conflict' => false, 'schedule' => $schedule];
     }
 
     public function update(Schedule $schedule, array $validated, int $userId): array
@@ -192,11 +201,15 @@ class ScheduleService
             'updated_by'      => $userId,
         ]);
 
-        return ['conflict' => false];
+        $this->noticeService->announceScheduleUpdated($schedule->refresh(), 'updated', $userId);
+
+        return ['conflict' => false, 'schedule' => $schedule];
     }
 
-    public function delete(Schedule $schedule): void
+    public function delete(Schedule $schedule, ?int $userId = null): void
     {
+        $this->noticeService->announceScheduleUpdated($schedule, 'deleted', $userId);
+
         $schedule->delete();
     }
 

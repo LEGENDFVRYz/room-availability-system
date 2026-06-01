@@ -14,11 +14,16 @@ use Illuminate\Validation\ValidationException;
 
 class DailyOperationService
 {
+    private readonly NoticeService $noticeService;
+
     public function __construct(
         private readonly AcademicTermService $academicTermService,
         private readonly RoomUsageLogService $roomUsageLogService,
         private readonly ValueNormalizer $normalizer,
-    ) {}
+        ?NoticeService $noticeService = null,
+    ) {
+        $this->noticeService = $noticeService ?? app(NoticeService::class);
+    }
 
     public function claimGraceMinutes(): int
     {
@@ -45,7 +50,7 @@ class DailyOperationService
         );
 
         return DB::transaction(function () use ($data, $userId, $eventDate, $term) {
-            return ScheduleException::create([
+            $exception = ScheduleException::create([
                 'schedule_id'      => null,
                 'academic_term_id' => $term->id,
                 'room_id'          => $data['room_id'],
@@ -64,6 +69,10 @@ class DailyOperationService
                 'created_by'       => $userId,
                 'updated_by'       => $userId,
             ]);
+
+            $this->noticeService->announceClassException($exception, null, $userId);
+
+            return $exception;
         });
     }
 
@@ -82,6 +91,7 @@ class DailyOperationService
                 ]);
 
                 $this->roomUsageLogService->markExceptionUsage($exception, 'cancelled', $userId);
+                $this->noticeService->announceClassException($exception->refresh(), 'cancellation', $userId);
 
                 return $exception;
             }
@@ -120,6 +130,7 @@ class DailyOperationService
             );
 
             $this->roomUsageLogService->markScheduleUsage($schedule, $eventDate, 'cancelled', $userId);
+            $this->noticeService->announceClassException($exception, 'cancellation', $userId);
 
             return $exception;
         });
@@ -134,6 +145,7 @@ class DailyOperationService
 
             if (! empty($data['exception_id'])) {
                 $exception = ScheduleException::with('schedule')->findOrFail($data['exception_id']);
+                $fromRoomId = $exception->room_id;
                 $term = $this->academicTermService->resolveForDate($eventDate) ?? $exception->academicTerm;
 
                 if (! $term) {
@@ -174,6 +186,8 @@ class DailyOperationService
                     'updated_by'     => $userId,
                 ]);
 
+                $this->noticeService->announceClassException($exception->refresh(), 'room_change', $userId, $fromRoomId);
+
                 return $exception;
             }
 
@@ -212,7 +226,7 @@ class DailyOperationService
                 ignoreScheduleId: $schedule->id,
             );
 
-            return ScheduleException::updateOrCreate(
+            $exception = ScheduleException::updateOrCreate(
                 [
                     'schedule_id' => $schedule->id,
                     'event_date'  => $eventDate,
@@ -235,6 +249,10 @@ class DailyOperationService
                     'updated_by'       => $userId,
                 ]
             );
+
+            $this->noticeService->announceClassException($exception, 'room_change', $userId, $schedule->room_id);
+
+            return $exception;
         });
     }
 
@@ -444,6 +462,7 @@ class DailyOperationService
                         ?? $this->roomUsageLogService->markScheduleUsage($schedule, $eventDate, 'reserved', $userId);
 
                     $usageLog = $this->roomUsageLogService->resetToAwaiting($usageLog, $userId);
+                    $this->noticeService->deactivateForSource('schedule_exception', $exception->id, $userId);
                     $exception->delete();
 
                     return $usageLog;
@@ -466,6 +485,8 @@ class DailyOperationService
                     ),
                     'updated_by'     => $userId,
                 ]);
+
+                $this->noticeService->announceClassException($exception->refresh(), null, $userId);
 
                 $usageLog = $this->roomUsageLogService->existingExceptionUsageLog($exception)
                     ?? $this->roomUsageLogService->markExceptionUsage($exception, 'reserved', $userId);
@@ -498,7 +519,11 @@ class DailyOperationService
 
             $usageLog ??= $this->roomUsageLogService->markScheduleUsage($schedule, $eventDate, 'reserved', $userId);
             $usageLog = $this->roomUsageLogService->resetToAwaiting($usageLog, $userId);
-            $cancellationException?->delete();
+
+            if ($cancellationException) {
+                $this->noticeService->deactivateForSource('schedule_exception', $cancellationException->id, $userId);
+                $cancellationException->delete();
+            }
 
             return $usageLog;
         });

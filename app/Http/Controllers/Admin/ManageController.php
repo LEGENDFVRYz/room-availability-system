@@ -88,7 +88,7 @@ class ManageController extends Controller
     public function deleteRoom(Room $room): RedirectResponse
     {
         try {
-            $this->roomService->deactivate($room);
+            $this->roomService->deactivate($room, auth()->id());
 
             return redirect()->route('admin.manage.rooms')
                 ->with('success', "Room \"{$room->name}\" has been deactivated.");
@@ -137,6 +137,7 @@ class ManageController extends Controller
             $term = $this->academicTermService->findOrCreateAndSetCurrent(
                 (int) $validated['year_start'],
                 (int) $validated['semester'],
+                auth()->id(),
             );
 
             return redirect()->route('admin.manage.configs')

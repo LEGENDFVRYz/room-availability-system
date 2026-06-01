@@ -11,6 +11,7 @@ use App\Models\ScheduleException;
 use App\Services\DailyOperationReadService;
 use App\Services\DailyOperationService;
 use App\Services\RoomOverrideService;
+use App\Services\NoticeService;
 use App\Services\Support\ValueNormalizer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -25,6 +26,7 @@ class OperationController extends Controller
         private readonly DailyOperationService $dailyOperationService,
         private readonly DailyOperationReadService $dailyOperationReadService,
         private readonly ValueNormalizer $normalizer,
+        private readonly NoticeService $noticeService,
     ) {}
 
     # -------------------------------------------------------------------
@@ -159,6 +161,12 @@ class OperationController extends Controller
 
     public function destroyException(ScheduleException $scheduleException): RedirectResponse
     {
+        $this->noticeService->deactivateForSource(
+            'schedule_exception',
+            $scheduleException->id,
+            request()->user()->id,
+        );
+
         $scheduleException->delete();
 
         return back()->with('success', 'Daily exception removed.');

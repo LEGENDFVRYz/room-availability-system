@@ -8,6 +8,13 @@ use Illuminate\Validation\ValidationException;
 
 class RoomOverrideService
 {
+    private readonly NoticeService $noticeService;
+
+    public function __construct(?NoticeService $noticeService = null)
+    {
+        $this->noticeService = $noticeService ?? app(NoticeService::class);
+    }
+
     public function create(array $data, int $userId): RoomOverride
     {
         $payload = $this->normalizePayload($data);
@@ -18,12 +25,16 @@ class RoomOverrideService
             endsAt: $payload['ends_at'],
         );
 
-        return RoomOverride::create([
+        $override = RoomOverride::create([
             ...$payload,
             'is_active'  => true,
             'created_by' => $userId,
             'updated_by' => null,
         ]);
+
+        $this->noticeService->announceRoomOverride($override, $userId);
+
+        return $override;
     }
 
     public function update(RoomOverride $override, array $data, int $userId): RoomOverride
@@ -44,7 +55,10 @@ class RoomOverrideService
             'updated_by' => $userId,
         ]);
 
-        return $override->refresh();
+        $override = $override->refresh();
+        $this->noticeService->announceRoomOverride($override, $userId);
+
+        return $override;
     }
 
     /**
@@ -55,6 +69,8 @@ class RoomOverrideService
     public function clear(RoomOverride $override, int $userId): RoomOverride
     {
         if ($this->isArchived($override)) {
+            $this->noticeService->deactivateForSource('room_override', $override->id, $userId);
+
             return $override;
         }
 
@@ -64,6 +80,8 @@ class RoomOverrideService
                 'updated_by' => $userId,
             ]);
 
+            $this->noticeService->deactivateForSource('room_override', $override->id, $userId);
+
             return $override->refresh();
         }
 
@@ -71,6 +89,8 @@ class RoomOverrideService
             'ends_at'    => now(),
             'updated_by' => $userId,
         ]);
+
+        $this->noticeService->deactivateForSource('room_override', $override->id, $userId);
 
         return $override->refresh();
     }

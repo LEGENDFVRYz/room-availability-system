@@ -1,7 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\FloorStatusController;
-use App\Http\Controllers\Kiosk\AnnouncementController;
+use App\Http\Controllers\Api;
+use App\Http\Controllers\Kiosk;
 use App\Http\Controllers\Kiosk\DashboardController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -23,5 +24,8 @@ Route::prefix('kiosk')->name('kiosk.')->group(function () {
     Route::get('/dashboard/floor-status', [FloorStatusController::class, 'index'])->name('dashboard.floor-status');
 
     # Annoucements
-    Route::get('/announcements', [AnnouncementController::class, 'index'])->name('announcements');
+    Route::get('/announcements', [Kiosk\AnnouncementController::class, 'index'])->name('announcements');
+
+    # Annoucements - API (temporary)
+    Route::get('/api/announcements', [Api\AnnouncementController::class, 'index'])->name('api.announcements');
 });

@@ -24,6 +24,8 @@ export interface RoomSchedule {
 }
 
 
+type YearLevel = '1' | '2' | '3' | '4' | 'unknown';
+
 // Props n emits
 const props = defineProps<{ roomSchedules: RoomSchedule[] }>();
 const emit = defineEmits<{ openEdit: [entry: RoomEntry] }>();
@@ -37,13 +39,15 @@ const today    = new Date().getDay();
 const todayIdx = today === 0 ? 6 : today - 1; // 0=Mon … 6=Sun
 const selectedDay = ref<number>(todayIdx);
 
-// --- Calendar constant
-const START_HOUR  = 7;
-const END_HOUR    = 21;
-const HOUR_H      = 64;
+// --- Calendar constants aligned with DailyRoomGrid.vue
+const START_HOUR = 7;
+const END_HOUR = 21;
+const HOUR_H = 76;
+const TIME_COLUMN_WIDTH = 64;
+const ROOM_COLUMN_WIDTH = 118;
 const GRID_HEIGHT = (END_HOUR - START_HOUR) * HOUR_H;
 
-const hours     = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i);
+const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i);
 const hourLines = hours.slice(0, -1);
 
 
@@ -59,38 +63,52 @@ const hasAnySchedule = computed(() =>
     roomsForDay.value.some(r => r.schedules.length > 0),
 );
 
+const gridMinWidth = computed(() => `${TIME_COLUMN_WIDTH + roomsForDay.value.length * ROOM_COLUMN_WIDTH}px`);
+
 
 // --- Helpers
-const parseMins = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
-const topPx     = (t: string)            => ((parseMins(t) - START_HOUR * 60) / 60) * HOUR_H;
-const heightPx  = (s: string, e: string) => ((parseMins(e) - parseMins(s)) / 60) * HOUR_H;
+function parseMins(time: string): number {
+    const [hour, minute] = time.split(':').map(Number);
+    return hour * 60 + minute;
+}
 
-const fmtHour = (h: number) => `${h % 12 || 12}${h < 12 ? 'AM' : 'PM'}`;
-const fmtTime = (t: string) => {
-    const [h, m] = t.split(':').map(Number);
-    return `${h % 12 || 12}:${m.toString().padStart(2, '0')}${h < 12 ? 'AM' : 'PM'}`;
+function topPx(time: string): number {
+    return ((parseMins(time) - START_HOUR * 60) / 60) * HOUR_H;
+}
+
+function heightPx(start: string, end: string): number {
+    return Math.max(((parseMins(end) - parseMins(start)) / 60) * HOUR_H, 34);
+}
+
+function fmtHour(hour: number): string {
+    return `${hour % 12 || 12}${hour < 12 ? 'AM' : 'PM'}`;
+}
+
+function fmtTime(time: string): string {
+    const [hour, minute] = time.split(':').map(Number);
+    return `${hour % 12 || 12}:${minute.toString().padStart(2, '0')}${hour < 12 ? 'AM' : 'PM'}`;
+}
+
+function yearLevel(entry: RoomEntry): YearLevel {
+    const section = entry.section ?? '';
+    const bscpeMatch = section.match(/BSCPE\s*([1-4])/i);
+    const fallbackMatch = section.match(/(?:^|\s)([1-4])(?:[-\s]|$)/);
+    const value = bscpeMatch?.[1] ?? fallbackMatch?.[1];
+
+    return ['1', '2', '3', '4'].includes(value ?? '') ? (value as YearLevel) : 'unknown';
+}
+
+const YEAR_LEVEL_CLASS: Record<YearLevel, string> = {
+    '1': 'border-sky-300 bg-sky-50 text-sky-950',
+    '2': 'border-emerald-300 bg-emerald-50 text-emerald-950',
+    '3': 'border-violet-300 bg-violet-50 text-violet-950',
+    '4': 'border-pup-maroon/30 bg-pup-maroon-pale text-pup-maroon-deep',
+    unknown: 'border-gray-200 bg-gray-50 text-gray-800',
 };
 
-const COLOR_CLASSES: Record<string, string> = {
-    blue:   'bg-sky-100    border-sky-300    text-sky-900',
-    rose:   'bg-rose-100   border-rose-300   text-rose-900',
-    green:  'bg-green-100  border-green-300  text-green-900',
-    orange: 'bg-orange-100 border-orange-300 text-orange-900',
-    teal:   'bg-teal-100   border-teal-300   text-teal-900',
-    violet: 'bg-violet-100 border-violet-300 text-violet-900',
-    yellow: 'bg-yellow-100 border-yellow-300 text-yellow-900',
-    purple: 'bg-purple-100 border-purple-300 text-purple-900',
-};
-const colorClass = (c: string) =>
-    COLOR_CLASSES[c] ?? 'bg-gray-100 border-gray-300 text-gray-900';
-
-const ROOM_TYPE_BADGE: Record<string, string> = {
-    classroom:    'bg-blue-50 text-blue-600',
-    laboratory:   'bg-violet-50 text-violet-600',
-    office:       'bg-orange-50 text-orange-600',
-    special_room: 'bg-teal-50 text-teal-600',
-    other:        'bg-gray-100 text-gray-500',
-};
+function scheduleBlockClass(entry: RoomEntry): string {
+    return `${YEAR_LEVEL_CLASS[yearLevel(entry)]} z-30`;
+}
 </script>
 
 <template>
@@ -115,82 +133,100 @@ const ROOM_TYPE_BADGE: Record<string, string> = {
         </div>
 
         <!-- Room grid -->
-        <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
-            <div class="min-w-[900px]">
+        <div class="relative z-0 rounded-xl border border-gray-200 bg-white shadow-sm">
+            <div class="overflow-x-auto overflow-y-hidden rounded-md">
+                <div class="w-full" :style="{ minWidth: gridMinWidth }">
 
-                <!-- Room header row -->
-                <div class="flex border-b border-gray-200">
-                    <div class="w-14 shrink-0 border-r border-gray-200 bg-gray-50/80" />
-                    <div
-                        v-for="room in roomsForDay"
-                        :key="room.id"
-                        class="flex min-w-[110px] flex-1 flex-col items-center justify-center border-r border-gray-100 px-1 py-2.5 last:border-r-0"
-                        :class="room.type === 'office' ? 'bg-gray-50/60' : ''"
-                    >
-                        <span
-                            class="mb-0.5 rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold"
-                            :class="ROOM_TYPE_BADGE[room.type] ?? ROOM_TYPE_BADGE.other"
-                        >
-                            {{ room.code }}
-                        </span>
-                        <span class="text-center text-[11px] font-semibold leading-tight text-gray-700">
-                            {{ room.name }}
-                        </span>
-                    </div>
-                </div>
-
-                <!-- Grid body -->
-                <div class="flex" :style="{ height: GRID_HEIGHT + 'px' }">
-
-                    <!-- Time label column -->
-                    <div class="relative w-14 shrink-0 border-r border-gray-200 bg-gray-50/80">
+                    <!-- Room header row -->
+                    <div class="flex border-b border-pup-maroon-deep bg-pup-maroon text-white">
                         <div
-                            v-for="h in hours"
-                            :key="h"
-                            class="absolute right-0 flex w-full items-center justify-end pr-2"
-                            :style="{ top: ((h - START_HOUR) * HOUR_H - 8) + 'px' }"
+                            class="sticky left-0 z-30 flex w-16 shrink-0 items-center justify-center border-r border-white/15 bg-pup-maroon-deep px-2 py-3 text-[10px] font-bold uppercase tracking-wider text-pup-gold-light shadow-[8px_0_12px_-12px_rgba(0,0,0,0.6)]"
                         >
-                            <span class="text-[10px] font-medium leading-none text-gray-400">
-                                {{ fmtHour(h) }}
+                            Time
+                        </div>
+
+                        <div
+                            v-for="room in roomsForDay"
+                            :key="room.id"
+                            :title="room.name"
+                            class="flex min-w-[118px] flex-1 items-center justify-center border-r border-white/10 px-1.5 py-3 text-center last:border-r-0"
+                        >
+                            <span class="font-mono text-xs font-bold uppercase tracking-wide text-white">
+                                {{ room.code }}
                             </span>
                         </div>
                     </div>
 
-                    <!-- Room columns -->
-                    <div
-                        v-for="room in roomsForDay"
-                        :key="room.id"
-                        class="relative min-w-[110px] flex-1 border-r border-gray-100 last:border-r-0"
-                        :class="room.type === 'office' ? 'bg-gray-50/30' : ''"
-                    >
-                        <div
-                            v-for="h in hourLines"
-                            :key="'hr-' + h"
-                            class="pointer-events-none absolute inset-x-0 border-t border-gray-100"
-                            :style="{ top: ((h - START_HOUR) * HOUR_H) + 'px' }"
-                        />
-                        <div
-                            v-for="h in hourLines"
-                            :key="'hf-' + h"
-                            class="pointer-events-none absolute inset-x-0 border-t border-dashed border-gray-50"
-                            :style="{ top: ((h - START_HOUR) * HOUR_H + HOUR_H / 2) + 'px' }"
-                        />
+                    <!-- Grid body -->
+                    <div class="relative flex" :style="{ minHeight: GRID_HEIGHT + 'px' }">
 
+                        <!-- Time label column -->
+                        <div class="sticky left-0 z-[80] w-16 shrink-0 border-r border-gray-200 bg-gray-50/95 shadow-[8px_0_12px_-12px_rgba(0,0,0,0.35)]">
+                            <div
+                                v-for="hour in hours"
+                                :key="hour"
+                                class="absolute right-0 flex w-full items-center justify-end pr-2"
+                                :style="{ top: ((hour - START_HOUR) * HOUR_H - 8) + 'px' }"
+                            >
+                                <span class="text-[10px] font-medium leading-none text-gray-400">
+                                    {{ fmtHour(hour) }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Room columns -->
                         <div
-                            v-for="entry in room.schedules"
-                            :key="entry.id"
-                            class="group absolute inset-x-1 cursor-pointer overflow-hidden rounded-md border px-1.5 py-1 transition-all hover:brightness-95 hover:shadow-md"
-                            :class="colorClass(entry.color)"
-                            :style="{
-                                top:    topPx(entry.start_time) + 2 + 'px',
-                                height: (heightPx(entry.start_time, entry.end_time) - 4) + 'px',
-                            }"
-                            @click="emit('openEdit', entry)"
+                            v-for="room in roomsForDay"
+                            :key="room.id"
+                            class="group/room relative min-w-[118px] flex-1 border-r border-gray-100 last:border-r-0"
+                            :class="room.type === 'office' ? 'bg-gray-50/30' : ''"
                         >
-                            <p class="text-[11px] font-bold leading-snug">{{ entry.section }}</p>
-                            <p class="line-clamp-1 text-[10px] font-medium opacity-75 leading-snug">{{ entry.subject }}</p>
-                            <p class="mt-0.5 text-[10px] opacity-55">{{ fmtTime(entry.start_time) }}–{{ fmtTime(entry.end_time) }}</p>
-                            <p v-if="entry.instructor" class="mt-0.5 truncate text-[10px] opacity-45">{{ entry.instructor }}</p>
+                            <div
+                                v-for="hour in hourLines"
+                                :key="`line-${room.id}-${hour}`"
+                                class="pointer-events-none absolute inset-x-0 border-t border-gray-100"
+                                :style="{ top: ((hour - START_HOUR) * HOUR_H) + 'px' }"
+                            />
+                            <div
+                                v-for="hour in hourLines"
+                                :key="`half-${room.id}-${hour}`"
+                                class="pointer-events-none absolute inset-x-0 border-t border-dashed border-gray-50"
+                                :style="{
+                                    top: ((hour - START_HOUR) * HOUR_H + HOUR_H / 2) + 'px',
+                                }"
+                            />
+
+                            <button
+                                v-for="entry in room.schedules"
+                                :key="entry.id"
+                                type="button"
+                                class="absolute inset-x-1 overflow-hidden rounded-md border px-1.5 py-1 text-left shadow-sm transition duration-150 hover:z-[60] hover:brightness-95 hover:shadow-md"
+                                :class="scheduleBlockClass(entry)"
+                                :style="{
+                                    top: topPx(entry.start_time) + 3 + 'px',
+                                    height: heightPx(entry.start_time, entry.end_time) - 6 + 'px',
+                                }"
+                                @click="emit('openEdit', entry)"
+                            >
+                                <div class="flex w-full min-w-0 items-center justify-between gap-2">
+                                    <p class="line-clamp-2 text-[11px] font-bold leading-snug text-gray-900">
+                                        {{ entry.subject_code }}
+                                    </p>
+                                </div>
+
+                                <p class="line-clamp-2 text-[10px] font-semibold leading-snug opacity-80">
+                                    {{ entry.subject }}
+                                </p>
+                                <p class="mt-0.5 text-[10px] opacity-65">
+                                    {{ fmtTime(entry.start_time) }}–{{ fmtTime(entry.end_time) }}
+                                </p>
+                                <p class="truncate text-[10px] opacity-55">
+                                    {{ entry.section }}
+                                </p>
+                                <p v-if="entry.instructor" class="mt-0.5 truncate text-[10px] opacity-45">
+                                    {{ entry.instructor }}
+                                </p>
+                            </button>
                         </div>
                     </div>
                 </div>

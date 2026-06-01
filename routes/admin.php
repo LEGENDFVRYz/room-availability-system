@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ManageController;
 use App\Http\Controllers\Admin\OperationController;
 use App\Http\Controllers\Admin\RecordController;
+use App\Http\Controllers\Admin\RecordPdfExportController;
 use App\Http\Controllers\Admin\ScheduleController;
 use App\Http\Controllers\Admin\ScheduleImportController;
 use Illuminate\Support\Facades\Route;
@@ -72,5 +73,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified'])->group(
 
     Route::get('/records/usage',        [RecordController::class, 'roomUsage'])->name('records.usage');
     Route::get('/records/activity',     [RecordController::class, 'activity'])->name('records.activity');
+
+    # Records (Api) - temporary
+    Route::get('/records/usage/export/pdf',     [RecordPdfExportController::class, 'roomUsage'])->name('records.usage.export.pdf');
+    Route::get('/records/activity/export/pdf',  [RecordPdfExportController::class, 'activity'])->name('records.activity.export.pdf');
     
 });

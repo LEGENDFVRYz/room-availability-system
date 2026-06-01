@@ -9,7 +9,7 @@ import { getInitials } from '@/composables/useInitials';
 import type { BreadcrumbItem, NavItem, SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
 import { CalendarDays, ClipboardList, LayoutDashboard, Megaphone, Menu, Settings2, Activity } from 'lucide-vue-next';
-import { computed } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 
 interface Props {
     breadcrumbs?: BreadcrumbItem[];
@@ -62,6 +62,125 @@ const dashboardLink = computed(() => {
     if (inKioskDomain.value) return '/kiosk/dashboard';
     return '/';
 });
+
+type AnnouncementCountApiResponse = {
+    data?: {
+        count?: number;
+    };
+    meta?: {
+        poll_interval_ms?: number;
+        last_updated_at?: string;
+    };
+};
+
+const announcementCount = ref(0);
+const announcementPollInterval = ref(15000);
+const announcementCountUpdatedAt = ref<string | null>(null);
+
+let announcementCountTimer: ReturnType<typeof window.setInterval> | null = null;
+let announcementCountController: AbortController | null = null;
+let isFetchingAnnouncementCount = false;
+
+const announcementCountLabel = computed(() => {
+    if (announcementCount.value > 99) {
+        return '99+';
+    }
+
+    return String(announcementCount.value);
+});
+
+const shouldShowAnnouncementCount = (item: NavItem): boolean => {
+    return inKioskDomain.value
+        && item.href.replace(/\/$/, '') === '/kiosk/announcements'
+        && announcementCount.value > 0;
+};
+
+const announcementBadgeClass = (item: NavItem): string => {
+    return isActiveNavItem(item)
+        ? 'bg-pup-maroon-deep text-pup-gold-light ring-pup-maroon-deep/10'
+        : 'bg-pup-gold text-pup-maroon-deep ring-pup-gold-light/30';
+};
+
+const stopAnnouncementCountPolling = () => {
+    if (announcementCountTimer) {
+        window.clearInterval(announcementCountTimer);
+        announcementCountTimer = null;
+    }
+
+    announcementCountController?.abort();
+    announcementCountController = null;
+    isFetchingAnnouncementCount = false;
+};
+
+const startAnnouncementCountPolling = () => {
+    stopAnnouncementCountPolling();
+
+    if (!inKioskDomain.value) {
+        announcementCount.value = 0;
+        announcementCountUpdatedAt.value = null;
+        return;
+    }
+
+    fetchAnnouncementCount();
+
+    announcementCountTimer = window.setInterval(() => {
+        fetchAnnouncementCount();
+    }, announcementPollInterval.value);
+};
+
+const fetchAnnouncementCount = async () => {
+    if (!inKioskDomain.value || isFetchingAnnouncementCount) {
+        return;
+    }
+
+    isFetchingAnnouncementCount = true;
+    announcementCountController?.abort();
+    announcementCountController = new AbortController();
+
+    try {
+        const response = await fetch('/kiosk/api/announcements/count', {
+            method: 'GET',
+            headers: {
+                Accept: 'application/json',
+            },
+            cache: 'no-store',
+            signal: announcementCountController.signal,
+        });
+
+        if (!response.ok) {
+            throw new Error(`Announcement count request failed with status ${response.status}`);
+        }
+
+        const payload = await response.json() as AnnouncementCountApiResponse;
+
+        announcementCount.value = Number(payload.data?.count ?? 0);
+        announcementCountUpdatedAt.value = payload.meta?.last_updated_at ?? new Date().toISOString();
+
+        if (payload.meta?.poll_interval_ms && payload.meta.poll_interval_ms !== announcementPollInterval.value) {
+            announcementPollInterval.value = payload.meta.poll_interval_ms;
+            startAnnouncementCountPolling();
+        }
+    } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+            return;
+        }
+
+        console.error(error);
+    } finally {
+        isFetchingAnnouncementCount = false;
+    }
+};
+
+watch(
+    () => inKioskDomain.value,
+    () => startAnnouncementCountPolling(),
+    { immediate: true },
+);
+
+onBeforeUnmount(() => {
+    stopAnnouncementCountPolling();
+});
+
 </script>
 
 
@@ -103,6 +222,14 @@ const dashboardLink = computed(() => {
                     >
                         <component v-if="item.icon" :is="item.icon" class="h-4 w-4" />
                         {{ item.title }}
+                        <span
+                            v-if="shouldShowAnnouncementCount(item)"
+                            class="ml-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none ring-2"
+                            :class="announcementBadgeClass(item)"
+                            aria-label="Current active announcements"
+                        >
+                            {{ announcementCountLabel }}
+                        </span>
                     </Link>
                 </div>
 
@@ -145,6 +272,14 @@ const dashboardLink = computed(() => {
                                 >
                                     <component v-if="item.icon" :is="item.icon" class="h-4 w-4" />
                                     {{ item.title }}
+                                    <span
+                                        v-if="shouldShowAnnouncementCount(item)"
+                                        class="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none ring-2"
+                                        :class="announcementBadgeClass(item)"
+                                        aria-label="Current active announcements"
+                                    >
+                                        {{ announcementCountLabel }}
+                                    </span>
                                 </Link>
                             </nav>
                         </SheetContent>

@@ -40,7 +40,7 @@
             margin-bottom: 14px;
             padding: 12px 14px;
             border: 1px solid #e5e7eb;
-            border-left: 6px solid #800000;
+            /* border-left: 6px solid #800000; */
             background: #fff8e1;
         }
 
@@ -178,13 +178,9 @@
         }
 
         .footer {
-            position: fixed;
-            left: 0;
-            right: 0;
-            bottom: -22px;
-            height: 18px;
+            margin-top: 14px;
+            padding-top: 5px;
             border-top: 1px solid #e5e7eb;
-            padding-top: 4px;
             font-size: 8px;
             color: #6b7280;
         }
@@ -208,11 +204,11 @@
     <div class="report-wrapper">
         @include('pdf.header')
         @yield('content')
-    </div>
 
-    <div class="footer">
-        <span class="footer-left">CPE Room Availability System</span>
-        <span class="footer-right">Generated {{ $generatedAt ?? now()->format('M d, Y h:i A') }}</span>
+        <div class="footer">
+            <span class="footer-left">CPE Room Availability System</span>
+            <span class="footer-right">Generated {{ $generatedAt ?? now()->format('M d, Y h:i A') }}</span>
+        </div>
     </div>
 </body>
 </html>

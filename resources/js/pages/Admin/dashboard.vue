@@ -160,7 +160,7 @@ const fallbackQuickActions: QuickActionItem[] = [
     { label: 'Add Schedule', href: '/admin/schedules' },
     { label: 'View Operations', href: '/admin/operations/daily' },
     { label: 'Add Room', href: '/admin/manage/rooms' },
-    { label: 'View Records', href: '/admin/records/room-usage' },
+    { label: 'View Records', href: '/admin/records/usage' },
 ];
 
 const quickActionsWithIcons = computed(() => {

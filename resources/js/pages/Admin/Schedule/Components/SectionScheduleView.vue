@@ -143,13 +143,15 @@ const fmtTime = (t: string) => {
             <div class="min-w-[760px]">
 
                 <!-- Day header -->
-                <div class="flex border-b border-gray-200">
-                    <div class="w-14 shrink-0 border-r border-gray-200 bg-gray-50/80" />
+                <div class="flex border-b border-pup-maroon-deep/30 bg-pup-maroon text-white">
+                    <div class="flex w-14 shrink-0 items-center justify-center border-r border-white/15 bg-pup-maroon-deep px-2 py-3">
+                        <span class="text-[10px] font-bold uppercase tracking-wide text-white">TIME</span>
+                    </div>
+
                     <div
                         v-for="(dayName, dayIdx) in DAYS_SHORT"
                         :key="dayIdx"
-                        class="flex flex-1 items-center justify-center border-r border-gray-100 py-3 text-xs font-semibold uppercase tracking-wide last:border-r-0"
-                        :class="dayIdx >= 5 ? 'bg-gray-50/60 text-gray-400' : 'text-gray-600'"
+                        class="flex flex-1 items-center justify-center border-r border-white/15 bg-pup-maroon py-3 text-xs font-bold uppercase tracking-wide text-white last:border-r-0"
                     >
                         <span class="hidden lg:inline">{{ DAYS_LONG[dayIdx] }}</span>
                         <span class="lg:hidden">{{ dayName }}</span>

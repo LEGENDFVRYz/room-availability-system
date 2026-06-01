@@ -213,7 +213,7 @@ class AdminDashboardService
             ['label' => 'Add Schedule',    'href' => url('/admin/schedules')],
             ['label' => 'View Operations', 'href' => url('/admin/operations/daily')],
             ['label' => 'Add Room',        'href' => url('/admin/manage/rooms')],
-            ['label' => 'View Records',    'href' => url('/admin/records/room-usage')],
+            ['label' => 'View Records',    'href' => url('/admin/records/usage')],
         ];
     }
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Room;
 use App\Services\DailyOperationReadService;
+use App\Services\Support\ValueNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -13,6 +14,7 @@ class FloorStatusController extends Controller
 {
     public function __construct(
         private readonly DailyOperationReadService $dailyOperationReadService,
+        private readonly ValueNormalizer $normalizer,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -44,7 +46,7 @@ class FloorStatusController extends Controller
                     'room_id'       => $room->code,
                     'code'          => $room->code,
                     'label'         => $room->name,
-                    'room_type'     => $this->enumValue($room->room_type),
+                    'room_type'     => $this->normalizer->enumValue($room->room_type),
                     'floor'         => $room->floor,
                     'capacity'      => $room->capacity,
                     'status'        => $status,
@@ -140,10 +142,5 @@ class FloorStatusController extends Controller
         }
 
         return 10;
-    }
-
-    private function enumValue(mixed $value): mixed
-    {
-        return $value instanceof \BackedEnum ? $value->value : $value;
     }
 }

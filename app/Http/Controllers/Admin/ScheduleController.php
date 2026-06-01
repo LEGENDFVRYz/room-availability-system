@@ -15,6 +15,11 @@ use Inertia\Response;
 
 class ScheduleController extends Controller
 {
+    public function __construct(
+        private readonly AcademicTermService $academicTermService,
+        private readonly ScheduleService $scheduleService,
+    ) {}
+
     // ── Shared helpers ────────────────────────────────────────────────────────
     private function activeRooms(): \Illuminate\Support\Collection
     {
@@ -29,32 +34,24 @@ class ScheduleController extends Controller
             ]);
     }
 
-    private function termPayload($term): array|null
-    {
-        return $term ? [
-            'label'    => $term->label,
-            'semester' => $term->semester->label(),
-        ] : null;
-    }
-
     // ── Pages ─────────────────────────────────────────────────────────────────
 
     public function sections(): Response
     {
-        $term = (new AcademicTermService())->getCurrent();
+        $term = $this->academicTermService->getCurrent();
 
         return Inertia::render('Admin/Schedule/Sections', [
-            'sections'    => $term ? (new ScheduleService())->getSectionsForTerm($term) : [],
-            'rooms'       => $this->activeRooms(),
+            'sections' => $term ? $this->scheduleService->getSectionsForTerm($term) : [],
+            'rooms'    => $this->activeRooms(),
         ]);
     }
 
     public function rooms(): Response
     {
-        $term = (new AcademicTermService())->getCurrent();
+        $term = $this->academicTermService->getCurrent();
 
         return Inertia::render('Admin/Schedule/Rooms', [
-            'room_schedules' => $term ? (new ScheduleService())->getRoomSchedulesForTerm($term) : [],
+            'room_schedules' => $term ? $this->scheduleService->getRoomSchedulesForTerm($term) : [],
             'rooms'          => $this->activeRooms(),
         ]);
     }
@@ -63,7 +60,7 @@ class ScheduleController extends Controller
 
     public function store(ScheduleRequest $request): RedirectResponse
     {
-        $term = (new AcademicTermService())->getCurrent();
+        $term = $this->academicTermService->getCurrent();
 
         if (! $term) {
             return redirect()->route('admin.schedules.sections')
@@ -71,7 +68,7 @@ class ScheduleController extends Controller
         }
 
         try {
-            $result = (new ScheduleService())->create(
+            $result = $this->scheduleService->create(
                 $request->validated(),
                 $term->id,
                 auth()->id(),
@@ -96,7 +93,7 @@ class ScheduleController extends Controller
     public function update(Schedule $schedule, ScheduleRequest $request): RedirectResponse
     {
         try {
-            $result = (new ScheduleService())->update(
+            $result = $this->scheduleService->update(
                 $schedule,
                 $request->validated(),
                 auth()->id(),
@@ -121,7 +118,7 @@ class ScheduleController extends Controller
     public function destroy(Schedule $schedule): RedirectResponse
     {
         try {
-            (new ScheduleService())->delete($schedule);
+            $this->scheduleService->delete($schedule);
 
             return redirect()->route('admin.schedules.sections')
                 ->with('success', 'Schedule entry deleted.');

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\AcademicTerm;
 use App\Models\RoomOverride;
 use App\Models\RoomUsageLog;
+use App\Services\Support\ValueNormalizer;
 use App\Models\Schedule;
 use App\Models\ScheduleException;
 use Illuminate\Support\Carbon;
@@ -13,6 +14,12 @@ use Illuminate\Validation\ValidationException;
 
 class DailyOperationService
 {
+    public function __construct(
+        private readonly AcademicTermService $academicTermService,
+        private readonly RoomUsageLogService $roomUsageLogService,
+        private readonly ValueNormalizer $normalizer,
+    ) {}
+
     public function claimGraceMinutes(): int
     {
         return max(1, (int) config('daily_operations.claim_grace_minutes', 60));
@@ -21,7 +28,7 @@ class DailyOperationService
     public function requestClass(array $data, int $userId): ScheduleException
     {
         $eventDate = Carbon::parse($data['event_date'])->toDateString();
-        $term = $this->resolveTermForDate($eventDate);
+        $term = $this->academicTermService->resolveForDate($eventDate);
 
         if (! $term) {
             throw ValidationException::withMessages([
@@ -74,7 +81,7 @@ class DailyOperationService
                     'updated_by' => $userId,
                 ]);
 
-                $this->markExceptionUsage($exception, 'cancelled', $userId);
+                $this->roomUsageLogService->markExceptionUsage($exception, 'cancelled', $userId);
 
                 return $exception;
             }
@@ -86,7 +93,7 @@ class DailyOperationService
             }
 
             $schedule = Schedule::findOrFail($data['schedule_id']);
-            $term = $this->resolveTermForDate($eventDate) ?? $schedule->academicTerm;
+            $term = $this->academicTermService->resolveForDate($eventDate) ?? $schedule->academicTerm;
 
             $exception = ScheduleException::updateOrCreate(
                 [
@@ -112,7 +119,7 @@ class DailyOperationService
                 ]
             );
 
-            $this->markScheduleUsage($schedule, $eventDate, 'cancelled', $userId);
+            $this->roomUsageLogService->markScheduleUsage($schedule, $eventDate, 'cancelled', $userId);
 
             return $exception;
         });
@@ -127,7 +134,7 @@ class DailyOperationService
 
             if (! empty($data['exception_id'])) {
                 $exception = ScheduleException::with('schedule')->findOrFail($data['exception_id']);
-                $term = $this->resolveTermForDate($eventDate) ?? $exception->academicTerm;
+                $term = $this->academicTermService->resolveForDate($eventDate) ?? $exception->academicTerm;
 
                 if (! $term) {
                     throw ValidationException::withMessages([
@@ -135,8 +142,8 @@ class DailyOperationService
                     ]);
                 }
 
-                $originalStartTime = $this->timeValue($exception->start_time);
-                $originalEndTime = $this->timeValue($exception->end_time);
+                $originalStartTime = $this->normalizer->timeString($exception->start_time);
+                $originalEndTime = $this->normalizer->timeString($exception->end_time);
                 $effectiveStartTime = $this->effectiveRoomChangeStartTime(
                     eventDate: $eventDate,
                     term: $term,
@@ -177,7 +184,7 @@ class DailyOperationService
             }
 
             $schedule = Schedule::findOrFail($data['schedule_id']);
-            $term = $this->resolveTermForDate($eventDate) ?? $schedule->academicTerm;
+            $term = $this->academicTermService->resolveForDate($eventDate) ?? $schedule->academicTerm;
 
             if (! $term) {
                 throw ValidationException::withMessages([
@@ -185,8 +192,8 @@ class DailyOperationService
                 ]);
             }
 
-            $originalStartTime = $this->timeValue($schedule->start_time);
-            $originalEndTime = $this->timeValue($schedule->end_time);
+            $originalStartTime = $this->normalizer->timeString($schedule->start_time);
+            $originalEndTime = $this->normalizer->timeString($schedule->end_time);
             $effectiveStartTime = $this->effectiveRoomChangeStartTime(
                 eventDate: $eventDate,
                 term: $term,
@@ -247,16 +254,16 @@ class DailyOperationService
                     ]);
                 }
 
-                $eventDate = $this->dateValue($exception->event_date);
-                $term = $this->resolveTermForDate($eventDate) ?? $exception->academicTerm;
+                $eventDate = $this->normalizer->dateString($exception->event_date);
+                $term = $this->academicTermService->resolveForDate($eventDate) ?? $exception->academicTerm;
 
                 if ($term) {
                     $this->assertRoomSlotAvailable(
                         eventDate: $eventDate,
                         term: $term,
                         roomId: $exception->room_id,
-                        startTime: $this->timeValue($exception->start_time ?: $exception->schedule?->start_time),
-                        endTime: $this->timeValue($exception->end_time ?: $exception->schedule?->end_time),
+                        startTime: $this->normalizer->timeString($exception->start_time ?: $exception->schedule?->start_time),
+                        endTime: $this->normalizer->timeString($exception->end_time ?: $exception->schedule?->end_time),
                         ignoreScheduleId: $exception->schedule_id,
                         ignoreExceptionId: $exception->id,
                     );
@@ -268,7 +275,7 @@ class DailyOperationService
                     'updated_by' => $userId,
                 ]);
 
-                return $this->markExceptionUsage($exception, 'occupied', $userId, actualStart: now());
+                return $this->roomUsageLogService->markExceptionUsage($exception, 'occupied', $userId, actualStart: now());
             }
 
             if (empty($data['schedule_id'])) {
@@ -278,20 +285,20 @@ class DailyOperationService
             }
 
             $schedule = Schedule::findOrFail($data['schedule_id']);
-            $term = $this->resolveTermForDate($eventDate) ?? $schedule->academicTerm;
+            $term = $this->academicTermService->resolveForDate($eventDate) ?? $schedule->academicTerm;
 
             if ($term) {
                 $this->assertRoomSlotAvailable(
                     eventDate: $eventDate,
                     term: $term,
                     roomId: $schedule->room_id,
-                    startTime: $this->timeValue($schedule->start_time),
-                    endTime: $this->timeValue($schedule->end_time),
+                    startTime: $this->normalizer->timeString($schedule->start_time),
+                    endTime: $this->normalizer->timeString($schedule->end_time),
                     ignoreScheduleId: $schedule->id,
                 );
             }
 
-            return $this->markScheduleUsage($schedule, $eventDate, 'occupied', $userId, actualStart: now());
+            return $this->roomUsageLogService->markScheduleUsage($schedule, $eventDate, 'occupied', $userId, actualStart: now());
         });
     }
 
@@ -307,7 +314,7 @@ class DailyOperationService
                     'updated_by' => $userId,
                 ]);
 
-                return $this->markExceptionUsage($exception, 'completed', $userId, actualEnd: now());
+                return $this->roomUsageLogService->markExceptionUsage($exception, 'completed', $userId, actualEnd: now());
             }
 
             if (empty($data['schedule_id'])) {
@@ -318,7 +325,7 @@ class DailyOperationService
 
             $schedule = Schedule::findOrFail($data['schedule_id']);
 
-            return $this->markScheduleUsage($schedule, $eventDate, 'completed', $userId, actualEnd: now());
+            return $this->roomUsageLogService->markScheduleUsage($schedule, $eventDate, 'completed', $userId, actualEnd: now());
         });
     }
 
@@ -329,7 +336,7 @@ class DailyOperationService
 
             if (! empty($data['exception_id'])) {
                 $exception = ScheduleException::findOrFail($data['exception_id']);
-                $usageLog = $this->existingExceptionUsageLog($exception);
+                $usageLog = $this->roomUsageLogService->existingExceptionUsageLog($exception);
 
                 $this->assertUsageLogStatus(
                     usageLog: $usageLog,
@@ -344,7 +351,7 @@ class DailyOperationService
                     'updated_by' => $userId,
                 ]);
 
-                return $this->resetUsageLogToAwaiting($usageLog, $userId);
+                return $this->roomUsageLogService->resetToAwaiting($usageLog, $userId);
             }
 
             if (empty($data['schedule_id'])) {
@@ -354,7 +361,7 @@ class DailyOperationService
             }
 
             $schedule = Schedule::findOrFail($data['schedule_id']);
-            $usageLog = $this->existingScheduleUsageLog($schedule, $eventDate);
+            $usageLog = $this->roomUsageLogService->existingScheduleUsageLog($schedule, $eventDate);
 
             $this->assertUsageLogStatus(
                 usageLog: $usageLog,
@@ -363,7 +370,7 @@ class DailyOperationService
                 message: 'Only started classes can have their start action reverted.',
             );
 
-            return $this->resetUsageLogToAwaiting($usageLog, $userId);
+            return $this->roomUsageLogService->resetToAwaiting($usageLog, $userId);
         });
     }
 
@@ -374,7 +381,7 @@ class DailyOperationService
 
             if (! empty($data['exception_id'])) {
                 $exception = ScheduleException::findOrFail($data['exception_id']);
-                $usageLog = $this->existingExceptionUsageLog($exception);
+                $usageLog = $this->roomUsageLogService->existingExceptionUsageLog($exception);
 
                 $this->assertUsageLogStatus(
                     usageLog: $usageLog,
@@ -389,7 +396,7 @@ class DailyOperationService
                     'updated_by' => $userId,
                 ]);
 
-                return $this->reopenCompletedUsageLog($usageLog, $userId);
+                return $this->roomUsageLogService->reopenCompleted($usageLog, $userId);
             }
 
             if (empty($data['schedule_id'])) {
@@ -399,7 +406,7 @@ class DailyOperationService
             }
 
             $schedule = Schedule::findOrFail($data['schedule_id']);
-            $usageLog = $this->existingScheduleUsageLog($schedule, $eventDate);
+            $usageLog = $this->roomUsageLogService->existingScheduleUsageLog($schedule, $eventDate);
 
             $this->assertUsageLogStatus(
                 usageLog: $usageLog,
@@ -408,7 +415,7 @@ class DailyOperationService
                 message: 'Only completed classes can have their completion reverted.',
             );
 
-            return $this->reopenCompletedUsageLog($usageLog, $userId);
+            return $this->roomUsageLogService->reopenCompleted($usageLog, $userId);
         });
     }
 
@@ -419,8 +426,8 @@ class DailyOperationService
 
             if (! empty($data['exception_id'])) {
                 $exception = ScheduleException::with('schedule')->findOrFail($data['exception_id']);
-                $eventType = $this->enumValue($exception->event_type);
-                $exceptionStatus = $this->enumValue($exception->status);
+                $eventType = $this->normalizer->enumString($exception->event_type);
+                $exceptionStatus = $this->normalizer->enumString($exception->status);
 
                 if ($eventType === 'cancellation') {
                     $schedule = $exception->schedule;
@@ -433,10 +440,10 @@ class DailyOperationService
 
                     $this->assertScheduleCanBeRestored($schedule, $eventDate, $exception->id);
 
-                    $usageLog = $this->existingScheduleUsageLog($schedule, $eventDate)
-                        ?? $this->markScheduleUsage($schedule, $eventDate, 'reserved', $userId);
+                    $usageLog = $this->roomUsageLogService->existingScheduleUsageLog($schedule, $eventDate)
+                        ?? $this->roomUsageLogService->markScheduleUsage($schedule, $eventDate, 'reserved', $userId);
 
-                    $usageLog = $this->resetUsageLogToAwaiting($usageLog, $userId);
+                    $usageLog = $this->roomUsageLogService->resetToAwaiting($usageLog, $userId);
                     $exception->delete();
 
                     return $usageLog;
@@ -454,16 +461,16 @@ class DailyOperationService
                     'status'         => 'pending',
                     'claimed_at'     => null,
                     'auto_cancel_at' => $this->autoCancelAt(
-                        $this->dateValue($exception->event_date),
-                        $this->timeValue($exception->start_time ?: $exception->schedule?->start_time),
+                        $this->normalizer->dateString($exception->event_date),
+                        $this->normalizer->timeString($exception->start_time ?: $exception->schedule?->start_time),
                     ),
                     'updated_by'     => $userId,
                 ]);
 
-                $usageLog = $this->existingExceptionUsageLog($exception)
-                    ?? $this->markExceptionUsage($exception, 'reserved', $userId);
+                $usageLog = $this->roomUsageLogService->existingExceptionUsageLog($exception)
+                    ?? $this->roomUsageLogService->markExceptionUsage($exception, 'reserved', $userId);
 
-                return $this->resetUsageLogToAwaiting($usageLog, $userId);
+                return $this->roomUsageLogService->resetToAwaiting($usageLog, $userId);
             }
 
             if (empty($data['schedule_id'])) {
@@ -479,9 +486,9 @@ class DailyOperationService
                 ->where('event_type', 'cancellation')
                 ->first();
 
-            $usageLog = $this->existingScheduleUsageLog($schedule, $eventDate);
+            $usageLog = $this->roomUsageLogService->existingScheduleUsageLog($schedule, $eventDate);
 
-            if (! $cancellationException && $this->enumValue($usageLog?->status) !== 'cancelled') {
+            if (! $cancellationException && $this->normalizer->enumString($usageLog?->status) !== 'cancelled') {
                 throw ValidationException::withMessages([
                     'schedule_id' => 'No cancelled class record was found to restore.',
                 ]);
@@ -489,122 +496,12 @@ class DailyOperationService
 
             $this->assertScheduleCanBeRestored($schedule, $eventDate, $cancellationException?->id);
 
-            $usageLog ??= $this->markScheduleUsage($schedule, $eventDate, 'reserved', $userId);
-            $usageLog = $this->resetUsageLogToAwaiting($usageLog, $userId);
+            $usageLog ??= $this->roomUsageLogService->markScheduleUsage($schedule, $eventDate, 'reserved', $userId);
+            $usageLog = $this->roomUsageLogService->resetToAwaiting($usageLog, $userId);
             $cancellationException?->delete();
 
             return $usageLog;
         });
-    }
-
-    public function markScheduleUsage(
-        Schedule $schedule,
-        string $eventDate,
-        string $status,
-        int $userId,
-        ?Carbon $actualStart = null,
-        ?Carbon $actualEnd = null,
-    ): RoomUsageLog {
-        $log = RoomUsageLog::query()
-            ->whereDate('usage_date', $eventDate)
-            ->where('source', 'schedule')
-            ->where('schedule_id', $schedule->id)
-            ->first() ?? new RoomUsageLog([
-                'usage_date'     => $eventDate,
-                'source'         => 'schedule',
-                'schedule_id'    => $schedule->id,
-                'room_id'        => $schedule->room_id,
-                'subject_code'   => $schedule->subject_code,
-                'subject_title'  => $schedule->subject_title,
-                'section'        => $schedule->section,
-                'instructor_name'=> $schedule->instructor_name,
-                'expected_start' => $this->timeValue($schedule->start_time),
-                'expected_end'   => $this->timeValue($schedule->end_time),
-            ]);
-
-        return $this->applyUsageStatus($log, $status, $userId, $actualStart, $actualEnd);
-    }
-
-    public function markExceptionUsage(
-        ScheduleException $exception,
-        string $status,
-        int $userId,
-        ?Carbon $actualStart = null,
-        ?Carbon $actualEnd = null,
-    ): RoomUsageLog {
-        $log = RoomUsageLog::query()
-            ->whereDate('usage_date', $exception->event_date)
-            ->where('source', 'schedule_exception')
-            ->where('schedule_exception_id', $exception->id)
-            ->first() ?? new RoomUsageLog([
-                'usage_date'             => $exception->event_date,
-                'source'                 => 'schedule_exception',
-                'schedule_id'            => $exception->schedule_id,
-                'schedule_exception_id'  => $exception->id,
-                'room_id'                => $exception->room_id,
-                'subject_code'           => $exception->subject_code ?: ($exception->schedule?->subject_code ?? ''),
-                'subject_title'          => $exception->subject_title ?: ($exception->schedule?->subject_title ?? ''),
-                'section'                => $exception->section ?: ($exception->schedule?->section ?? ''),
-                'instructor_name'        => $exception->instructor_name ?: $exception->schedule?->instructor_name,
-                'expected_start'         => $this->timeValue($exception->start_time ?: $exception->schedule?->start_time),
-                'expected_end'           => $this->timeValue($exception->end_time ?: $exception->schedule?->end_time),
-            ]);
-
-        return $this->applyUsageStatus($log, $status, $userId, $actualStart, $actualEnd);
-    }
-
-
-    private function existingScheduleUsageLog(Schedule $schedule, string $eventDate): ?RoomUsageLog
-    {
-        return RoomUsageLog::query()
-            ->whereDate('usage_date', $eventDate)
-            ->where('source', 'schedule')
-            ->where('schedule_id', $schedule->id)
-            ->first();
-    }
-
-    private function existingExceptionUsageLog(ScheduleException $exception): ?RoomUsageLog
-    {
-        return RoomUsageLog::query()
-            ->whereDate('usage_date', $exception->event_date)
-            ->where('source', 'schedule_exception')
-            ->where('schedule_exception_id', $exception->id)
-            ->first();
-    }
-
-    /**
-     * A reverted start/cancellation should not delete the usage log. The log is
-     * moved back to the pre-claim reserved state and actual timestamps are
-     * cleared so Daily Operations falls back to scheduled/pending display state.
-     */
-    private function resetUsageLogToAwaiting(RoomUsageLog $log, int $userId): RoomUsageLog
-    {
-        $log->status = 'reserved';
-        $log->recorded_by = $userId;
-        $log->actual_start = null;
-        $log->actual_end = null;
-        $log->save();
-
-        return $log;
-    }
-
-    /**
-     * A reverted completion should reopen the class as ongoing while preserving
-     * the original actual_start timestamp from the borrowing log.
-     */
-    private function reopenCompletedUsageLog(RoomUsageLog $log, int $userId): RoomUsageLog
-    {
-        $log->status = 'occupied';
-        $log->recorded_by = $userId;
-        $log->actual_end = null;
-
-        if (! $log->actual_start) {
-            $log->actual_start = now();
-        }
-
-        $log->save();
-
-        return $log;
     }
 
     /**
@@ -616,7 +513,7 @@ class DailyOperationService
         string $messageKey,
         string $message,
     ): void {
-        if (! $usageLog || ! in_array($this->enumValue($usageLog->status), $allowedStatuses, true)) {
+        if (! $usageLog || ! in_array($this->normalizer->enumString($usageLog->status), $allowedStatuses, true)) {
             throw ValidationException::withMessages([
                 $messageKey => $message,
                 'usage_log_id' => 'The matching room usage log could not be found in the expected state.',
@@ -629,7 +526,7 @@ class DailyOperationService
         string $eventDate,
         ?int $ignoreExceptionId = null,
     ): void {
-        $term = $this->resolveTermForDate($eventDate) ?? $schedule->academicTerm;
+        $term = $this->academicTermService->resolveForDate($eventDate) ?? $schedule->academicTerm;
 
         if (! $term) {
             throw ValidationException::withMessages([
@@ -641,8 +538,8 @@ class DailyOperationService
             eventDate: $eventDate,
             term: $term,
             roomId: $schedule->room_id,
-            startTime: $this->timeValue($schedule->start_time),
-            endTime: $this->timeValue($schedule->end_time),
+            startTime: $this->normalizer->timeString($schedule->start_time),
+            endTime: $this->normalizer->timeString($schedule->end_time),
             ignoreScheduleId: $schedule->id,
             ignoreExceptionId: $ignoreExceptionId,
         );
@@ -650,8 +547,8 @@ class DailyOperationService
 
     private function assertExceptionCanBeRestored(ScheduleException $exception): void
     {
-        $eventDate = $this->dateValue($exception->event_date);
-        $term = $this->resolveTermForDate($eventDate) ?? $exception->academicTerm;
+        $eventDate = $this->normalizer->dateString($exception->event_date);
+        $term = $this->academicTermService->resolveForDate($eventDate) ?? $exception->academicTerm;
 
         if (! $term) {
             throw ValidationException::withMessages([
@@ -663,43 +560,13 @@ class DailyOperationService
             eventDate: $eventDate,
             term: $term,
             roomId: $exception->room_id,
-            startTime: $this->timeValue($exception->start_time ?: $exception->schedule?->start_time),
-            endTime: $this->timeValue($exception->end_time ?: $exception->schedule?->end_time),
+            startTime: $this->normalizer->timeString($exception->start_time ?: $exception->schedule?->start_time),
+            endTime: $this->normalizer->timeString($exception->end_time ?: $exception->schedule?->end_time),
             ignoreScheduleId: $exception->schedule_id,
             ignoreExceptionId: $exception->id,
         );
     }
 
-    private function applyUsageStatus(
-        RoomUsageLog $log,
-        string $status,
-        int $userId,
-        ?Carbon $actualStart = null,
-        ?Carbon $actualEnd = null,
-    ): RoomUsageLog {
-        $log->status = $status;
-        $log->recorded_by = $userId;
-
-        if ($actualStart) {
-            $log->actual_start = $actualStart;
-        }
-
-        if ($actualEnd) {
-            $log->actual_end = $actualEnd;
-
-            if (! $log->actual_start) {
-                $log->actual_start = $actualEnd;
-            }
-        }
-
-        if (in_array($status, ['cancelled', 'auto_cancelled'], true)) {
-            $log->actual_end = $log->actual_end ?: now();
-        }
-
-        $log->save();
-
-        return $log;
-    }
 
 
     /**
@@ -718,8 +585,8 @@ class DailyOperationService
         string $endTime,
         ?int $ignoreScheduleId = null,
     ): string {
-        $startTime = $this->timeValue($startTime);
-        $endTime = $this->timeValue($endTime);
+        $startTime = $this->normalizer->timeString($startTime);
+        $endTime = $this->normalizer->timeString($endTime);
         $dayOfWeek = Carbon::parse($eventDate)->dayOfWeekIso;
         $replacedScheduleIds = $this->replacedScheduleIdsForDate($eventDate, $term->id);
         $effectiveStartTime = $startTime;
@@ -770,8 +637,8 @@ class DailyOperationService
         ?int $ignoreScheduleId = null,
         ?int $ignoreExceptionId = null,
     ): void {
-        $startTime = $this->timeValue($startTime);
-        $endTime = $this->timeValue($endTime);
+        $startTime = $this->normalizer->timeString($startTime);
+        $endTime = $this->normalizer->timeString($endTime);
         $dayOfWeek = Carbon::parse($eventDate)->dayOfWeekIso;
 
         if ($startTime >= $endTime) {
@@ -848,7 +715,7 @@ class DailyOperationService
 
             $this->throwSlotConflict(
                 roomLabel: $this->roomLabel($roomId),
-                conflictType: ($windowState === 'completed' ? 'completed ' : '') . str_replace('_', ' ', $this->enumValue($exceptionConflict->event_type)),
+                conflictType: ($windowState === 'completed' ? 'completed ' : '') . str_replace('_', ' ', $this->normalizer->enumString($exceptionConflict->event_type)),
                 subjectCode: $exceptionConflict->subject_code ?: ($exceptionConflict->schedule?->subject_code ?? 'Class'),
                 startTime: $effectiveStart,
                 endTime: $effectiveEnd,
@@ -868,8 +735,8 @@ class DailyOperationService
      */
     private function effectiveScheduleWindow(Schedule $schedule, string $eventDate): array
     {
-        $startTime = $this->timeValue($schedule->start_time);
-        $endTime = $this->timeValue($schedule->end_time);
+        $startTime = $this->normalizer->timeString($schedule->start_time);
+        $endTime = $this->normalizer->timeString($schedule->end_time);
 
         $usageLog = RoomUsageLog::query()
             ->whereDate('usage_date', $eventDate)
@@ -895,8 +762,8 @@ class DailyOperationService
      */
     private function effectiveExceptionWindow(ScheduleException $exception): array
     {
-        $startTime = $this->timeValue($exception->start_time ?: $exception->schedule?->start_time);
-        $endTime = $this->timeValue($exception->end_time ?: $exception->schedule?->end_time);
+        $startTime = $this->normalizer->timeString($exception->start_time ?: $exception->schedule?->start_time);
+        $endTime = $this->normalizer->timeString($exception->end_time ?: $exception->schedule?->end_time);
 
         $usageLog = RoomUsageLog::query()
             ->whereDate('usage_date', $exception->event_date)
@@ -916,7 +783,7 @@ class DailyOperationService
             return [$startTime, $endTime, null];
         }
 
-        $status = $this->enumValue($usageLog->status);
+        $status = $this->normalizer->enumString($usageLog->status);
 
         if (in_array($status, ['cancelled', 'auto_cancelled'], true)) {
             return [$startTime, $startTime, $status];
@@ -926,7 +793,7 @@ class DailyOperationService
             return [$startTime, $endTime, null];
         }
 
-        $actualEnd = $this->timeValue($usageLog->actual_end);
+        $actualEnd = $this->normalizer->timeString($usageLog->actual_end);
 
         if ($actualEnd <= $startTime) {
             return [$startTime, $startTime, 'completed'];
@@ -952,7 +819,7 @@ class DailyOperationService
             return false;
         }
 
-        $status = $this->enumValue($usageLog?->status);
+        $status = $this->normalizer->enumString($usageLog?->status);
 
         if ($status !== '' && ! in_array($status, ['reserved'], true)) {
             return false;
@@ -1001,7 +868,7 @@ class DailyOperationService
             return;
         }
 
-        $status = $this->enumValue($overrideConflict->status);
+        $status = $this->normalizer->enumString($overrideConflict->status);
         $label = ucfirst(str_replace('_', ' ', $status));
         $startsAt = Carbon::parse($overrideConflict->starts_at)->format('g:i A');
         $endsAt = $overrideConflict->ends_at
@@ -1061,49 +928,9 @@ class DailyOperationService
         return trim("{$room->code} {$room->name}");
     }
 
-    private function enumValue(mixed $value): string
-    {
-        return $value instanceof \BackedEnum ? $value->value : (string) $value;
-    }
-
-    private function resolveTermForDate(string $date): ?AcademicTerm
-    {
-        return AcademicTerm::query()
-            ->where(function ($query) use ($date) {
-                $query->whereNull('starts_on')
-                    ->orWhereDate('starts_on', '<=', $date);
-            })
-            ->where(function ($query) use ($date) {
-                $query->whereNull('ends_on')
-                    ->orWhereDate('ends_on', '>=', $date);
-            })
-            ->orderByDesc('is_current')
-            ->orderByDesc('is_active')
-            ->latest('id')
-            ->first()
-            ?? AcademicTerm::current()->first();
-    }
-
     private function autoCancelAt(string $eventDate, string $startTime): Carbon
     {
         return $this->claimDeadlineAt($eventDate, $startTime);
     }
 
-    private function dateValue(mixed $value): string
-    {
-        if ($value instanceof Carbon) {
-            return $value->toDateString();
-        }
-
-        return Carbon::parse($value)->toDateString();
-    }
-
-    private function timeValue(mixed $value): string
-    {
-        if ($value instanceof Carbon) {
-            return $value->format('H:i');
-        }
-
-        return substr((string) $value, 0, 5);
-    }
 }

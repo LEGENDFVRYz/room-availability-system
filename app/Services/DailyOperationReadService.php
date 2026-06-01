@@ -2,25 +2,27 @@
 
 namespace App\Services;
 
-use App\Models\AcademicTerm;
 use App\Models\Room;
 use App\Models\RoomOverride;
-use App\Models\RoomUsageLog;
 use App\Models\Schedule;
 use App\Models\ScheduleException;
-use BackedEnum;
+use App\Services\Support\ValueNormalizer;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 class DailyOperationReadService
 {
     public function __construct(
+        private readonly AcademicTermService $academicTermService,
         private readonly DailyOperationService $dailyOperationService,
+        private readonly RoomUsageLogService $roomUsageLogService,
+        private readonly ValueNormalizer $normalizer,
     ) {}
 
     /**
-     * Returns the same read payload used by Admin Daily Operations.
-     * This keeps the kiosk/floorplan API aligned with admin daily decisions.
+     * Returns the same read payload used by Admin Daily Operations and kiosk APIs.
+     * Keep all Daily Operations visual reads here so controllers and APIs do not
+     * duplicate the schedule / exception / override priority chain.
      */
     public function payloadForDate(?string $selectedDateInput = null): array
     {
@@ -35,8 +37,7 @@ class DailyOperationReadService
         $selectedDate = $date->toDateString();
         $dayStart = $date->copy()->startOfDay();
         $dayEnd = $date->copy()->endOfDay();
-
-        $operationTerm = $this->resolveOperationTerm($date);
+        $operationTerm = $this->academicTermService->resolveForDate($date);
 
         $roomsBaseQuery = Room::query()
             ->select('id', 'code', 'name', 'room_type', 'floor', 'capacity', 'display_order', 'is_active')
@@ -66,8 +67,8 @@ class DailyOperationReadService
                         return false;
                     }
 
-                    $eventType = $this->enumValue($exception->event_type);
-                    $status = $this->enumValue($exception->status);
+                    $eventType = $this->normalizer->enumString($exception->event_type);
+                    $status = $this->normalizer->enumString($exception->status);
 
                     return in_array($eventType, ['cancellation', 'room_change'], true)
                         && $status !== 'auto_cancelled';
@@ -109,7 +110,7 @@ class DailyOperationReadService
             }
         }
 
-        $usageLogsBySlot = $this->usageLogsBySlot($selectedDate);
+        $usageLogsBySlot = $this->roomUsageLogService->logsBySlot($selectedDate);
 
         $usedRoomIds = $regularSchedules
             ->pluck('room_id')
@@ -132,7 +133,7 @@ class DailyOperationReadService
                 'id'            => $room->id,
                 'code'          => $room->code,
                 'name'          => $room->name,
-                'type'          => $this->enumValue($room->room_type),
+                'type'          => $this->normalizer->enumValue($room->room_type),
                 'floor'         => $room->floor,
                 'capacity'      => $room->capacity,
                 'display_order' => $room->display_order,
@@ -143,7 +144,7 @@ class DailyOperationReadService
         $regularItems = $regularSchedules->map(function (Schedule $schedule) use ($selectedDate, $usageLogsBySlot) {
             $usageLog = $usageLogsBySlot->get("schedule-{$schedule->id}");
 
-            return $this->applyUsageLogStatus([
+            return $this->roomUsageLogService->applyStatusToItem([
                 'id'                 => "schedule-{$schedule->id}",
                 'schedule_id'        => $schedule->id,
                 'exception_id'       => null,
@@ -161,16 +162,16 @@ class DailyOperationReadService
                 'subject_title'      => $schedule->subject_title ?? '',
                 'section'            => $schedule->section ?? '',
                 'instructor_name'    => $schedule->instructor_name,
-                'start_time'         => $this->timeValue($schedule->start_time),
-                'end_time'           => $this->timeValue($schedule->end_time),
+                'start_time'         => $this->normalizer->time($schedule->start_time),
+                'end_time'           => $this->normalizer->time($schedule->end_time),
                 'reason'             => null,
             ], $usageLog);
         });
 
         $exceptionItems = $exceptions->map(function (ScheduleException $exception) use ($selectedDate, $usageLogsBySlot) {
             $schedule = $exception->schedule;
-            $eventType = $this->enumValue($exception->event_type);
-            $status = $this->enumValue($exception->status);
+            $eventType = $this->normalizer->enumString($exception->event_type);
+            $status = $this->normalizer->enumString($exception->status);
             $originalRoom = $schedule?->room;
             $usageLog = $usageLogsBySlot->get("exception-{$exception->id}");
 
@@ -178,7 +179,7 @@ class DailyOperationReadService
                 $status = 'cancelled';
             }
 
-            return $this->applyUsageLogStatus([
+            return $this->roomUsageLogService->applyStatusToItem([
                 'id'                 => "exception-{$exception->id}",
                 'schedule_id'        => $exception->schedule_id,
                 'exception_id'       => $exception->id,
@@ -196,16 +197,16 @@ class DailyOperationReadService
                 'subject_title'      => $exception->subject_title ?: ($schedule?->subject_title ?? ''),
                 'section'            => $exception->section ?: ($schedule?->section ?? ''),
                 'instructor_name'    => $exception->instructor_name ?: $schedule?->instructor_name,
-                'start_time'         => $this->timeValue($exception->start_time ?: $schedule?->start_time),
-                'end_time'           => $this->timeValue($exception->end_time ?: $schedule?->end_time),
+                'start_time'         => $this->normalizer->time($exception->start_time ?: $schedule?->start_time),
+                'end_time'           => $this->normalizer->time($exception->end_time ?: $schedule?->end_time),
                 'reason'             => $exception->reason,
-                'claimed_at'         => $exception->claimed_at?->toIso8601String(),
-                'auto_cancel_at'     => $exception->auto_cancel_at?->toIso8601String(),
+                'claimed_at'         => $this->normalizer->dateTime($exception->claimed_at),
+                'auto_cancel_at'     => $this->normalizer->dateTime($exception->auto_cancel_at),
             ], $usageLog);
         });
 
         $overrideItems = $roomOverrides->map(function (RoomOverride $override) use ($dayStart, $dayEnd, $selectedDate) {
-            $status = $this->enumValue($override->status);
+            $status = $this->normalizer->enumString($override->status);
 
             $effectiveStart = $override->starts_at && $override->starts_at->greaterThan($dayStart)
                 ? $override->starts_at
@@ -240,11 +241,11 @@ class DailyOperationReadService
                 'subject_title'      => $title,
                 'section'            => '',
                 'instructor_name'    => null,
-                'start_time'         => $this->dateTimeToTime($effectiveStart, $dayStart),
-                'end_time'           => $this->dateTimeToTime($effectiveEnd, $dayEnd),
+                'start_time'         => $this->normalizer->dateTimeToTime($effectiveStart, $dayStart),
+                'end_time'           => $this->normalizer->dateTimeToTime($effectiveEnd, $dayEnd),
                 'reason'             => $override->reason,
-                'starts_at'          => $override->starts_at?->toIso8601String(),
-                'ends_at'            => $override->ends_at?->toIso8601String(),
+                'starts_at'          => $this->normalizer->dateTime($override->starts_at),
+                'ends_at'            => $this->normalizer->dateTime($override->ends_at),
             ];
         });
 
@@ -267,49 +268,6 @@ class DailyOperationReadService
         ];
     }
 
-    private function enumValue(mixed $value): mixed
-    {
-        return $value instanceof BackedEnum ? $value->value : $value;
-    }
-
-    private function timeValue(mixed $value): ?string
-    {
-        if ($value === null) {
-            return null;
-        }
-
-        if ($value instanceof Carbon) {
-            return $value->format('H:i');
-        }
-
-        return substr((string) $value, 0, 5);
-    }
-
-    private function dateTimeToTime(?Carbon $value, Carbon $fallback): string
-    {
-        return ($value ?? $fallback)->format('H:i');
-    }
-
-    private function resolveOperationTerm(Carbon $date): ?AcademicTerm
-    {
-        $selectedDate = $date->toDateString();
-
-        return AcademicTerm::query()
-            ->where(function ($query) use ($selectedDate) {
-                $query->whereNull('starts_on')
-                    ->orWhereDate('starts_on', '<=', $selectedDate);
-            })
-            ->where(function ($query) use ($selectedDate) {
-                $query->whereNull('ends_on')
-                    ->orWhereDate('ends_on', '>=', $selectedDate);
-            })
-            ->orderByDesc('is_current')
-            ->orderByDesc('is_active')
-            ->latest('id')
-            ->first()
-            ?? AcademicTerm::current()->first();
-    }
-
     private function scheduleExceptionsForDate(string $selectedDate, int $academicTermId): Collection
     {
         return ScheduleException::query()
@@ -322,42 +280,5 @@ class DailyOperationReadService
             ->whereDate('event_date', $selectedDate)
             ->orderBy('start_time')
             ->get();
-    }
-
-    private function usageLogsBySlot(string $selectedDate): Collection
-    {
-        return RoomUsageLog::query()
-            ->whereDate('usage_date', $selectedDate)
-            ->get()
-            ->keyBy(function (RoomUsageLog $log) {
-                return match ($log->source) {
-                    'schedule'           => "schedule-{$log->schedule_id}",
-                    'schedule_exception' => "exception-{$log->schedule_exception_id}",
-                    default              => "usage-{$log->id}",
-                };
-            });
-    }
-
-    private function applyUsageLogStatus(array $item, ?RoomUsageLog $usageLog): array
-    {
-        if (! $usageLog) {
-            return $item;
-        }
-
-        $item['usage_log_id'] = $usageLog->id;
-
-        $item['status'] = match ($usageLog->status) {
-            'reserved'       => $item['status'],
-            'occupied'       => 'ongoing',
-            'completed'      => 'completed',
-            'cancelled'      => 'cancelled',
-            'auto_cancelled' => 'auto_cancelled',
-            default          => $item['status'],
-        };
-
-        $item['actual_start'] = $usageLog->actual_start?->toIso8601String();
-        $item['actual_end'] = $usageLog->actual_end?->toIso8601String();
-
-        return $item;
     }
 }

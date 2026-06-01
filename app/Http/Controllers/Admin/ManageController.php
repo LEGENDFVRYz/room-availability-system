@@ -15,13 +15,18 @@ use Inertia\Response;
 
 class ManageController extends Controller
 {
+    public function __construct(
+        private readonly RoomService $roomService,
+        private readonly AcademicTermService $academicTermService,
+    ) {}
+
     // -------------------------------------------------------------------------
     //  Rooms
     // -------------------------------------------------------------------------
 
     public function rooms(): Response
     {
-        $rooms = (new RoomService())->getAll()
+        $rooms = $this->roomService->getAll()
             ->map(fn(Room $r) => [
                 'id'            => $r->id,
                 'code'          => $r->code,
@@ -47,7 +52,7 @@ class ManageController extends Controller
                 'updated_by' => auth()->id(),
             ]);
 
-            (new RoomService())->create($data);
+            $this->roomService->create($data);
 
             return redirect()->route('admin.manage.rooms')
                 ->with('success', 'Room added successfully.');
@@ -67,7 +72,7 @@ class ManageController extends Controller
                 'updated_by' => auth()->id(),
             ]);
 
-            (new RoomService())->update($room, $data);
+            $this->roomService->update($room, $data);
 
             return redirect()->route('admin.manage.rooms')
                 ->with('success', "Room \"{$room->name}\" updated successfully.");
@@ -83,7 +88,7 @@ class ManageController extends Controller
     public function deleteRoom(Room $room): RedirectResponse
     {
         try {
-            (new RoomService())->deactivate($room);
+            $this->roomService->deactivate($room);
 
             return redirect()->route('admin.manage.rooms')
                 ->with('success', "Room \"{$room->name}\" has been deactivated.");
@@ -129,7 +134,7 @@ class ManageController extends Controller
         ]);
 
         try {
-            $term = (new AcademicTermService())->findOrCreateAndSetCurrent(
+            $term = $this->academicTermService->findOrCreateAndSetCurrent(
                 (int) $validated['year_start'],
                 (int) $validated['semester'],
             );

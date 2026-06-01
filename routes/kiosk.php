@@ -23,6 +23,11 @@ Route::prefix('kiosk')->name('kiosk.')->group(function () {
     # DASHBOARD - API (temporary)
     Route::get('/dashboard/floor-status', [FloorStatusController::class, 'index'])->name('dashboard.floor-status');
 
+    # Schedules
+    Route::get('/schedules', function () {
+        return Inertia::render('Kiosk/schedule/index'); // <-- Semicolon added here
+    })->name('announcements');
+
     # Annoucements
     Route::get('/announcements', [Kiosk\AnnouncementController::class, 'index'])->name('announcements');
 

@@ -212,9 +212,9 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 12,
     },
     {
-        id: 'CEA301',
-        category: 'valid',
-        label: ['LECTURE', 'ROOM', '301'],
+        id: 'cpe_lab',
+        category: 'office',
+        label: ['CPE DEPT', 'LABORATORY'],
         shape: 'rect',
         x: 1480,
         y: 255,
@@ -222,14 +222,14 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         h: 95,
         fs: 10,
     },
-{
-        id: 'CEA317',
+    {
+        id: 'CEA300',
         category: 'valid',
         label: ['MICROCOMPUTER', 'LABORATORY', '317'],
         shape: 'polygon',
         points: '1480,350 1610,350 1610,590 1555,590 1555,520 1480,520',
         x: 1480,
-        y: 350,
+        y: 320,
         w: 130, // 1610 - 1480 = 130
         h: 240, // 590 - 350 = 240 (Your original 'h: 170' was too small for these points)
         fs: 11,

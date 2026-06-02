@@ -31,5 +31,6 @@ Route::prefix('kiosk')->name('kiosk.')->group(function () {
     Route::get('/announcements', [Kiosk\AnnouncementController::class, 'index'])->name('announcements');
 
     # Annoucements - API (temporary)
-    Route::get('/api/announcements', [Api\AnnouncementController::class, 'index'])->name('api.announcements');
+    Route::get('/api/announcements',         [Api\AnnouncementController::class, 'index'])->name('api.announcements');
+    Route::get('/api/announcements/count', [Api\AnnouncementController::class, 'count'])->name('api.announcements.count');
 });

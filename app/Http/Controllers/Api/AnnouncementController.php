@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Notice;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -38,5 +39,36 @@ class AnnouncementController extends Controller
                 'poll_interval_ms' => (int) config('room-system.kiosk_poll_interval', 15000),
             ],
         ]);
+    }
+
+    /**
+     * Return only the current active announcement count.
+     */
+    public function count(): JsonResponse
+    {
+        $total = $this->visibleNoticeQuery()->count();
+
+        return response()->json([
+            'data' => [
+                'count' => $total,
+            ],
+            'meta' => [
+                'last_updated_at' => now()->toIso8601String(),
+                'poll_interval_ms' => $this->pollIntervalMs(),
+            ],
+        ]);
+    }
+
+    private function visibleNoticeQuery(): Builder
+    {
+        return Notice::query()
+            ->published()
+            ->active()
+            ->visible();
+    }
+
+    private function pollIntervalMs(): int
+    {
+        return (int) config('room-system.kiosk_poll_interval', 15000);
     }
 }

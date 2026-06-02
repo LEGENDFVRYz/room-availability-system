@@ -20,7 +20,7 @@ export const floorplanCanvas = {
 
 export const floorplanRooms: FloorplanRoomLayout[] = [
     {
-        id: 'CEA306B',
+        id: 'CEA306b',
         category: 'valid',
         label: ['ECE', 'LAB.', '306B'],
         shape: 'rect',
@@ -31,7 +31,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 12,
     },
     {
-        id: 'CEA306A',
+        id: 'CEA306a',
         category: 'valid',
         label: ['ELECTRONIC', 'WORKSHOP', 'LABORATORY', '306A'],
         shape: 'rect',
@@ -42,7 +42,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 12,
     },
     {
-        id: 'CEA305B',
+        id: 'CEA305b',
         category: 'valid',
         label: ['ECE', 'RESEARCH', 'AND', 'DEVELOPMENT', 'UNIT', '305B'],
         shape: 'rect',
@@ -53,7 +53,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 9,
     },
     {
-        id: 'CEA305A',
+        id: 'CEA305a',
         category: 'valid',
         label: ['ELECTRONICS', 'FUNDAMENTAL', 'LAB-1', '305A'],
         shape: 'rect',
@@ -64,7 +64,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 12,
     },
     {
-        id: 'CEA304B',
+        id: 'CEA304b',
         category: 'valid',
         label: ['ECE', "STUDENT'S", 'SOCIETY', '304B'],
         shape: 'rect',
@@ -75,7 +75,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 9,
     },
     {
-        id: 'CEA304A',
+        id: 'CEA304a',
         category: 'valid',
         label: ['ELECTRONICS', 'FUNDAMENTAL', 'LAB-2', '304A'],
         shape: 'rect',
@@ -86,7 +86,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 12,
     },
     {
-        id: 'CEA303B',
+        id: 'CEA303b',
         category: 'valid',
         label: ['PUP', 'HELP', 'ASSIST', 'AND', 'MOBILIZE', '303B'],
         shape: 'rect',
@@ -97,7 +97,7 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 9,
     },
     {
-        id: 'CEA303A',
+        id: 'CEA303a',
         category: 'valid',
         label: ['TV AND', 'RADIO', 'COMMUNICATION', 'LABORATORY', '303A'],
         shape: 'rect',
@@ -212,9 +212,9 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         fs: 12,
     },
     {
-        id: 'cpe_lab',
-        category: 'office',
-        label: ['CpE DEPT', 'LABORATORY', '301'],
+        id: 'CEA301',
+        category: 'valid',
+        label: ['LECTURE', 'ROOM', '301'],
         shape: 'rect',
         x: 1480,
         y: 255,
@@ -222,8 +222,8 @@ export const floorplanRooms: FloorplanRoomLayout[] = [
         h: 95,
         fs: 10,
     },
-    {
-        id: 'CEA300',
+{
+        id: 'CEA317',
         category: 'valid',
         label: ['MICROCOMPUTER', 'LABORATORY', '317'],
         shape: 'polygon',

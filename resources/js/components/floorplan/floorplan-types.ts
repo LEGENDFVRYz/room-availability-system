@@ -55,13 +55,51 @@ export interface FloorplanMainStair {
     lines: number;
 }
 
+export interface FloorplanRoomScheduleItem {
+    id?: string | number | null;
+    schedule_id?: number | null;
+    exception_id?: number | null;
+    override_id?: number | null;
+    room_id?: number | string | null;
+    original_room_id?: number | null;
+    original_room_code?: string | null;
+    event_date?: string | null;
+    source?: string | null;
+    event_type?: string | null;
+    status?: string | null;
+    floorplan_status?: string | null;
+    subject_code?: string | null;
+    subject_title?: string | null;
+    section?: string | null;
+    year_level?: string | null;
+    instructor_name?: string | null;
+    start_time?: string | null;
+    end_time?: string | null;
+    time_range?: string | null;
+    reason?: string | null;
+    is_current?: boolean;
+}
+
 export interface FloorplanRoomStatus {
     room_id: string;
+    code?: string;
     label?: string;
     status?: string;
+    raw_status?: string | null;
+    source?: string | null;
+    event_type?: string | null;
     subject?: string | null;
+    subject_code?: string | null;
     section?: string | null;
+    year_level?: string | null;
     teacher?: string | null;
+    starts_at?: string | null;
+    ends_at?: string | null;
+    current_section?: string | null;
+    current_year_level?: string | null;
+    current_subject?: string | null;
+    current_time_range?: string | null;
+    items?: FloorplanRoomScheduleItem[];
     [key: string]: unknown;
 }
 

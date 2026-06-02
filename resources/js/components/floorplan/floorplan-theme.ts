@@ -45,7 +45,7 @@ export const defaultFloorplanTheme: FloorplanTheme = {
     statusOccupiedStroke: '#c24133',
     statusReservedFill: '#fff3c4',
     statusReservedStroke: '#a26a00',
-    statusMaintenanceFill: '#999da0',
+    statusMaintenanceFill: '#dcd7ce',
     statusMaintenanceStroke: '#5b554d',
     statusInactiveFill: '#e5e7eb',
     statusInactiveStroke: '#9ca3af',

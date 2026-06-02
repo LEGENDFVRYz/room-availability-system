@@ -14,6 +14,7 @@ import { defaultFloorplanTheme } from './floorplan-theme';
 import type {
     FloorplanColorMode,
     FloorplanRoomLayout,
+    FloorplanRoomScheduleItem,
     FloorplanRoomStatus,
     FloorplanStair,
     FloorplanTheme,
@@ -63,10 +64,60 @@ const selectedRoomData = computed<FloorplanRoomStatus | null>(() => {
     return getRoomData(selectedRoomId.value);
 });
 
+const selectedRoomItems = computed<FloorplanRoomScheduleItem[]>(() => {
+    const items = selectedRoomData.value?.items;
+
+    if (!Array.isArray(items)) return [];
+
+    return [...items].sort((first, second) => {
+        const firstStart = stringValue(first.start_time);
+        const secondStart = stringValue(second.start_time);
+        const firstEnd = stringValue(first.end_time);
+        const secondEnd = stringValue(second.end_time);
+
+        return firstStart.localeCompare(secondStart) || firstEnd.localeCompare(secondEnd);
+    });
+});
+
+const selectedCurrentItem = computed<FloorplanRoomScheduleItem | null>(() => {
+    return selectedRoomItems.value.find((item) => Boolean(item.is_current)) ?? null;
+});
+
+const orderedFloorplanRooms = computed<FloorplanRoomLayout[]>(() => {
+    return [...floorplanRooms].sort((first, second) => roomLayerPriority(first) - roomLayerPriority(second));
+});
+
 const shellClass = computed(() => [
     'grid gap-4 items-start',
     props.showPanel ? 'lg:grid-cols-[minmax(0,1fr)_20rem]' : 'grid-cols-1',
 ]);
+
+const STATUS_LABEL: Record<string, string> = {
+    scheduled: 'Reserved',
+    pending: 'Reserved',
+    ongoing: 'Occupied',
+    completed: 'Finished',
+    cancelled: 'Cancelled',
+    unclaimed: 'Unclaimed',
+    auto_cancelled: 'Auto-cancelled',
+    maintenance: 'Maintenance',
+    unavailable: 'Unavailable',
+    reserved: 'Reserved',
+    available: 'Available',
+    inactive: 'Inactive',
+    unknown: 'Unknown',
+};
+
+const EVENT_TYPE_LABEL: Record<string, string> = {
+    regular: 'Regular Class',
+    cancellation: 'Cancellation',
+    room_change: 'Room Change',
+    special_class: 'Special Class',
+    makeup_class: 'Makeup Class',
+    maintenance: 'Maintenance',
+    unavailable: 'Unavailable',
+    reserved: 'Reserved',
+};
 
 watch(
     () => props.initialRooms,
@@ -165,6 +216,14 @@ function roomStrokeWidth(room: FloorplanRoomLayout): number {
     return 2.2;
 }
 
+function roomLayerPriority(room: FloorplanRoomLayout): number {
+    if (isRoomClickable(room) && selectedRoomId.value === room.id) return 30;
+    if (isRoomClickable(room) && hoveredRoomId.value === room.id) return 20;
+    if (isRoomClickable(room)) return 10;
+
+    return 0;
+}
+
 function roomOpacity(room: FloorplanRoomLayout): number {
     if (!isRoomClickable(room)) return 1;
 
@@ -214,7 +273,152 @@ function selectRoom(room: FloorplanRoomLayout): void {
 }
 
 function formatStatus(status: unknown): string {
-    return String(status ?? 'inactive').replaceAll('_', ' ');
+    const value = String(status ?? 'inactive');
+
+    return STATUS_LABEL[value] ?? value.replaceAll('_', ' ');
+}
+
+function stringValue(value: unknown): string {
+    return typeof value === 'string' ? value : '';
+}
+
+function compactYearSectionLabel(data: FloorplanRoomStatus): string | null {
+    const status = getFloorplanStatus(data.status);
+
+    if (!['occupied', 'reserved'].includes(status)) return null;
+
+    const section = stringValue(data.current_section ?? data.section);
+
+    return section || null;
+}
+
+function roomMapSectionLabel(roomId: string): string | null {
+    const data = getRoomData(roomId);
+    const status = getFloorplanStatus(data.status);
+
+    if (!['occupied', 'reserved'].includes(status)) return null;
+
+    return stringValue(data.current_section ?? data.section) || null;
+}
+
+function roomSecondaryLabelY(room: FloorplanRoomLayout): number {
+    return labelStartY(room) + room.label.length * (room.fs + 3) + 6;
+}
+
+function roomSecondaryFontSize(room: FloorplanRoomLayout): number {
+    return Math.max(7, room.fs - 3);
+}
+
+function roomSecondaryLabelColor(room: FloorplanRoomLayout): string {
+    const status = getRoomStatus(room.id);
+
+    if (status === 'occupied') return mapTheme.value.statusOccupiedStroke;
+    if (status === 'reserved') return mapTheme.value.statusReservedStroke;
+
+    return mapTheme.value.labelColor;
+}
+
+function roomSectionPillWidth(room: FloorplanRoomLayout): number {
+    const label = roomMapSectionLabel(room.id) ?? '';
+    const fontSize = roomSecondaryFontSize(room);
+
+    return Math.max(42, label.length * (fontSize * 0.62) + 16);
+}
+
+function roomSectionPillHeight(room: FloorplanRoomLayout): number {
+    return roomSecondaryFontSize(room) + 8;
+}
+
+function roomSectionPillX(room: FloorplanRoomLayout): number {
+    return shapeCenterX(room) - roomSectionPillWidth(room) / 2;
+}
+
+function roomSectionPillY(room: FloorplanRoomLayout): number {
+    return roomSecondaryLabelY(room) - roomSectionPillHeight(room) + 2;
+}
+
+function roomSectionPillRadius(room: FloorplanRoomLayout): number {
+    return roomSectionPillHeight(room) / 2;
+}
+
+function roomSectionPillFill(room: FloorplanRoomLayout): string {
+    const status = getRoomStatus(room.id);
+
+    if (status === 'occupied') return '#ffffff';
+    if (status === 'reserved') return '#fffdf4';
+
+    return '#ffffff';
+}
+
+function roomSectionPillStroke(room: FloorplanRoomLayout): string {
+    return roomSecondaryLabelColor(room);
+}
+
+function roomSectionPillTextY(room: FloorplanRoomLayout): number {
+    return roomSectionPillY(room) + roomSectionPillHeight(room) / 2 + roomSecondaryFontSize(room) * 0.34;
+}
+
+function getFloorplanStatus(status: unknown): string {
+    return String(status ?? 'inactive');
+}
+
+function formatEventType(type: unknown): string {
+    const value = String(type ?? 'regular');
+
+    return EVENT_TYPE_LABEL[value] ?? value.replaceAll('_', ' ');
+}
+
+function formatTime(time?: string | null): string {
+    if (!time) return '—';
+
+    const [hourValue, minuteValue] = time.split(':');
+    const hour = Number(hourValue);
+    const minute = Number(minuteValue ?? 0);
+
+    if (Number.isNaN(hour) || Number.isNaN(minute)) return time;
+
+    return `${hour % 12 || 12}:${String(minute).padStart(2, '0')}${hour < 12 ? 'AM' : 'PM'}`;
+}
+
+function itemTimeRange(item: FloorplanRoomScheduleItem): string {
+    if (item.time_range) return item.time_range;
+
+    return `${formatTime(item.start_time)}–${formatTime(item.end_time)}`;
+}
+
+function itemYearSectionLabel(item: FloorplanRoomScheduleItem): string {
+    const section = item.section ?? '';
+
+    if (!section && item.source === 'override') return 'Room status item';
+    if (!section) return 'Section not specified';
+
+    return section;
+}
+
+function itemTitle(item: FloorplanRoomScheduleItem): string {
+    const subjectCode = item.subject_code ?? '';
+    const subjectTitle = item.subject_title ?? '';
+    const title = [subjectCode, subjectTitle].filter(Boolean).join(' · ');
+
+    if (title) return title;
+
+    return formatEventType(item.event_type);
+}
+
+function itemBadgeClass(item: FloorplanRoomScheduleItem): string {
+    const status = String(item.status ?? 'unknown');
+
+    if (status === 'ongoing') return 'bg-status-occupied-bg text-status-occupied';
+    if (['scheduled', 'pending', 'reserved'].includes(status)) return 'bg-status-reserved-bg text-status-reserved';
+    if (['maintenance', 'unavailable'].includes(status)) return 'bg-status-maintenance-bg text-status-maintenance';
+    if (['cancelled', 'auto_cancelled', 'unclaimed'].includes(status)) return 'bg-slate-100 text-slate-600';
+    if (status === 'completed') return 'bg-green-50 text-green-700';
+
+    return 'bg-gray-100 text-gray-600';
+}
+
+function closeRoomSheet(): void {
+    selectedRoomId.value = null;
 }
 
 async function refreshStatuses(): Promise<void> {
@@ -538,7 +742,7 @@ onUnmounted(() => {
                 <!-- Dynamic room layer. -->
                 <g>
                     <g
-                        v-for="room in floorplanRooms"
+                        v-for="room in orderedFloorplanRooms"
                         :key="room.id"
                         :class="isRoomClickable(room) ? 'cursor-pointer outline-none' : 'cursor-default outline-none'"
                         :tabindex="isRoomClickable(room) ? 0 : -1"
@@ -592,6 +796,32 @@ onUnmounted(() => {
                         >
                             {{ line }}
                         </text>
+
+                        <template v-if="roomMapSectionLabel(room.id)">
+                            <rect
+                                :x="roomSectionPillX(room)"
+                                :y="roomSectionPillY(room)"
+                                :width="roomSectionPillWidth(room)"
+                                :height="roomSectionPillHeight(room)"
+                                :rx="roomSectionPillRadius(room)"
+                                :ry="roomSectionPillRadius(room)"
+                                class="pointer-events-none"
+                                :fill="roomSectionPillFill(room)"
+                                :stroke="roomSectionPillStroke(room)"
+                                stroke-width="1.6"
+                            />
+
+                            <text
+                                :x="shapeCenterX(room)"
+                                :y="roomSectionPillTextY(room)"
+                                text-anchor="middle"
+                                class="pointer-events-none select-none font-sans font-bold"
+                                :fill="roomSectionPillStroke(room)"
+                                :font-size="roomSecondaryFontSize(room)"
+                            >
+                                {{ roomMapSectionLabel(room.id) }}
+                            </text>
+                        </template>
 
                         <title>{{ getRoomData(room.id).label }} - {{ formatStatus(getRoomData(room.id).status) }}</title>
                     </g>
@@ -687,6 +917,111 @@ onUnmounted(() => {
                 </template>
             </div>
         </section>
-        
+
+        <Teleport to="body">
+            <div
+                v-if="selectedRoomData && selectedLayoutRoom"
+                class="fixed inset-0 z-[180] flex items-end justify-center bg-black/40 p-4 sm:items-center"
+                @click.self="closeRoomSheet"
+            >
+                <section class="max-h-[calc(100vh-2rem)] w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+                    <header class="flex items-start justify-between gap-4 border-b border-gray-200 bg-gradient-to-r from-pup-maroon to-pup-maroon-deep px-5 py-4 text-white">
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-pup-gold-light">Room schedule sheet</p>
+                            <h2 class="mt-1 text-xl font-bold leading-tight">
+                                {{ selectedRoomData.room_id }} · {{ selectedRoomData.label ?? getRoomTitle(selectedLayoutRoom) }}
+                            </h2>
+                            <p class="mt-1 text-sm text-white/75">
+                                {{ formatStatus(selectedRoomData.status) }}
+                                <span v-if="compactYearSectionLabel(selectedRoomData)"> · {{ compactYearSectionLabel(selectedRoomData) }}</span>
+                            </p>
+                        </div>
+
+                        <button
+                            type="button"
+                            class="rounded-full bg-white/10 px-3 py-1.5 text-xl font-bold leading-none text-white transition hover:bg-white/20"
+                            aria-label="Close room schedule sheet"
+                            @click="closeRoomSheet"
+                        >
+                            ×
+                        </button>
+                    </header>
+
+                    <div class="max-h-[calc(100vh-9rem)] space-y-4 overflow-y-auto px-5 py-5">
+                        <div
+                            v-if="selectedCurrentItem"
+                            class="rounded-2xl border border-pup-gold/40 bg-pup-gold-pale/40 p-4"
+                        >
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="rounded-full px-2.5 py-1 text-xs font-bold" :class="itemBadgeClass(selectedCurrentItem)">
+                                    {{ formatStatus(selectedCurrentItem.status) }}
+                                </span>
+                                <span class="text-xs font-semibold uppercase tracking-wide text-pup-maroon">Current item</span>
+                            </div>
+
+                            <p class="mt-3 text-lg font-bold text-gray-900">{{ itemTitle(selectedCurrentItem) }}</p>
+                            <p class="mt-1 text-sm font-semibold text-pup-maroon">{{ itemYearSectionLabel(selectedCurrentItem) }}</p>
+                            <p class="mt-1 text-sm text-gray-600">
+                                {{ itemTimeRange(selectedCurrentItem) }}
+                                <span v-if="selectedCurrentItem.instructor_name"> · {{ selectedCurrentItem.instructor_name }}</span>
+                            </p>
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between gap-3">
+                                <div>
+                                    <h3 class="text-sm font-bold uppercase tracking-wide text-gray-800">All room reservations today</h3>
+                                    <p class="text-xs text-gray-500">Classes, room changes, special classes, and room overrides from Daily Operations.</p>
+                                </div>
+                                <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-600">
+                                    {{ selectedRoomItems.length }} item{{ selectedRoomItems.length === 1 ? '' : 's' }}
+                                </span>
+                            </div>
+
+                            <div v-if="selectedRoomItems.length" class="mt-3 space-y-3">
+                                <article
+                                    v-for="item in selectedRoomItems"
+                                    :key="String(item.id ?? `${item.start_time}-${item.event_type}-${item.subject_code}`)"
+                                    class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+                                    :class="item.is_current ? 'ring-2 ring-pup-gold/60' : ''"
+                                >
+                                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                        <div>
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <span class="rounded-full px-2.5 py-1 text-xs font-bold" :class="itemBadgeClass(item)">
+                                                    {{ formatStatus(item.status) }}
+                                                </span>
+                                                <span class="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-semibold text-gray-600">
+                                                    {{ formatEventType(item.event_type) }}
+                                                </span>
+                                                <span v-if="item.is_current" class="rounded-full bg-pup-maroon px-2.5 py-1 text-xs font-bold text-white">
+                                                    Now
+                                                </span>
+                                            </div>
+
+                                            <p class="mt-3 font-bold text-gray-950">{{ itemTitle(item) }}</p>
+                                            <p class="mt-1 text-sm font-semibold text-pup-maroon">{{ itemYearSectionLabel(item) }}</p>
+                                            <p v-if="item.instructor_name" class="mt-1 text-sm text-gray-600">Instructor: {{ item.instructor_name }}</p>
+                                            <p v-if="item.original_room_code" class="mt-1 text-xs font-semibold text-orange-600">Moved from {{ item.original_room_code }}</p>
+                                            <p v-if="item.reason" class="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">{{ item.reason }}</p>
+                                        </div>
+
+                                        <div class="shrink-0 rounded-xl bg-gray-50 px-3 py-2 text-left sm:text-right">
+                                            <p class="text-xs font-semibold uppercase text-gray-400">Time</p>
+                                            <p class="font-bold text-gray-900">{{ itemTimeRange(item) }}</p>
+                                        </div>
+                                    </div>
+                                </article>
+                            </div>
+
+                            <div v-else class="mt-3 rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center">
+                                <p class="font-semibold text-gray-700">No class or reservation listed for this room today.</p>
+                                <p class="mt-1 text-sm text-gray-500">This room is currently available based on the Daily Operations data.</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </Teleport>
     </div>
 </template>

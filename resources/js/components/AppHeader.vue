@@ -79,11 +79,7 @@ const dashboardLink = computed(() => {
         <nav class="sticky top-0 z-[100] flex h-[60px] items-center justify-between border-b-[3px] border-pup-gold bg-pup-maroon px-6">
             <!-- Brand -->
             <Link :href="dashboardLink" class="flex shrink-0 items-center gap-3">
-                <div
-                    class="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full border-2 border-pup-gold bg-pup-maroon-deep"
-                >
-                    <AppLogoIcon class="size-[20px] fill-current text-pup-gold" />
-                </div>
+                <img src="/images/pup-logo.png" alt="PUP Watermark" class="h-8 w-8 object-contain drop-shadow-sm" />
                 <div class="hidden sm:block">
                     <div class="text-[15px] font-semibold leading-snug text-white">CPE Room System</div>
                     <div class="text-[11px] text-pup-gold-light">Real-Time Availability</div>
@@ -127,11 +123,7 @@ const dashboardLink = computed(() => {
                             <SheetHeader
                                 class="flex flex-row items-center gap-3 border-b border-white/10 p-5"
                             >
-                                <div
-                                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-pup-gold bg-pup-maroon-deep"
-                                >
-                                    <AppLogoIcon class="size-4 fill-current text-pup-gold-light" />
-                                </div>
+                                <img src="/images/pup-logo.png" alt="PUP Watermark" class="h-8 w-8 object-contain drop-shadow-sm" />
                                 <div class="text-left">
                                     <div class="text-sm font-semibold text-white">CPE Room System</div>
                                     <div class="text-[11px] text-pup-gold-light">

@@ -46,7 +46,7 @@ onUnmounted(() => {
     <div class="flex flex-col flex-1 p-4 sm:p-8 md:p-12 relative z-10">
       <nav class="w-full max-w-6xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-slate-200 relative z-10 text-xs font-bold text-slate-400">
         <div class="flex items-center gap-3">
-          <img src="/images/pup-logo.png" alt="PUP Watermark" class="h-8 w-8 object-contain drop-shadow-sm" />
+          <img src="/images/cperas-logo.webp" alt="PUP Watermark" class="h-8 w-8 object-contain drop-shadow-sm" />
           <span class="tracking-wider text-[#7B1C2E] uppercase font-black">PUP-MNL <span class="text-slate-300 font-normal mx-1">|</span> College of Engineering</span>
         </div>
         

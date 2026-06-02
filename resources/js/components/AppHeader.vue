@@ -198,7 +198,7 @@ onBeforeUnmount(() => {
         <nav class="sticky top-0 z-[100] flex h-[60px] items-center justify-between border-b-[3px] border-pup-gold bg-pup-maroon px-6">
             <!-- Brand -->
             <Link :href="dashboardLink" class="flex shrink-0 items-center gap-3">
-                <img src="/images/pup-logo.png" alt="PUP Watermark" class="h-8 w-8 object-contain drop-shadow-sm" />
+                <img src="/images/cperas-logo.webp" alt="PUP Watermark" class="h-9 w-9 object-contain drop-shadow-sm" />
                 <div class="hidden sm:block">
                     <div class="text-[15px] font-semibold leading-snug text-white">CPE Room System</div>
                     <div class="text-[11px] text-pup-gold-light">Real-Time Availability</div>

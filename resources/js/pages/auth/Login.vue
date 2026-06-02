@@ -69,7 +69,7 @@ const submit = () => {
                     <div class="w-full max-w-md">
                         <div class="text-center">
                             <img
-                                src="/images/pup-logo.png"
+                                src="/images/cperas-logo.webp"
                                 alt="PUP Logo"
                                 class="mx-auto h-28 w-28 object-contain"
                             />

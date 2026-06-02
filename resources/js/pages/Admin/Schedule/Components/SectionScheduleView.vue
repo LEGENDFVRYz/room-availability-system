@@ -15,7 +15,7 @@ export interface ScheduleEntry {
     room: string | null;
     room_id: number | null;
     instructor: string | null;
-    color: string;
+    color: string; // Kept for interface compatibility, but ignored in UI
 }
 
 interface Section {
@@ -23,7 +23,6 @@ interface Section {
     year: number;
     schedules: ScheduleEntry[];
 }
-
 
 // ─── Props / emits ────────────────────────────────────────────────────────────
 
@@ -105,19 +104,6 @@ const fmtTime = (t: string) => {
     const [h, m] = t.split(':').map(Number);
     return `${h % 12 || 12}:${m.toString().padStart(2, '0')}${h < 12 ? 'AM' : 'PM'}`;
 };
-
-const COLOR_CLASSES: Record<string, string> = {
-    blue:   'bg-sky-100    border-sky-300    text-sky-900',
-    rose:   'bg-rose-100   border-rose-300   text-rose-900',
-    green:  'bg-green-100  border-green-300  text-green-900',
-    orange: 'bg-orange-100 border-orange-300 text-orange-900',
-    teal:   'bg-teal-100   border-teal-300   text-teal-900',
-    violet: 'bg-violet-100 border-violet-300 text-violet-900',
-    yellow: 'bg-yellow-100 border-yellow-300 text-yellow-900',
-    purple: 'bg-purple-100 border-purple-300 text-purple-900',
-};
-const colorClass = (c: string) =>
-    COLOR_CLASSES[c] ?? 'bg-gray-100 border-gray-300 text-gray-900';
 </script>
 
 <template>
@@ -210,8 +196,7 @@ const colorClass = (c: string) =>
                         <div
                             v-for="entry in schedulesByDay[dayIdx]"
                             :key="entry.id"
-                            class="group absolute inset-x-1 cursor-pointer overflow-hidden rounded-md border px-1.5 py-1 transition-all hover:brightness-95 hover:shadow-md"
-                            :class="colorClass(entry.color)"
+                            class="group absolute inset-x-1 cursor-pointer overflow-hidden rounded-md border px-1.5 py-1 transition-all hover:brightness-95 hover:shadow-md bg-pup-maroon-pale border-pup-maroon/20 text-pup-maroon-dark"
                             :style="{
                                 top:    topPx(entry.start_time) + 2 + 'px',
                                 height: (heightPx(entry.start_time, entry.end_time) - 4) + 'px',
@@ -219,7 +204,7 @@ const colorClass = (c: string) =>
                             @click="emit('openEdit', entry)"
                         >
                             <p class="line-clamp-2 text-[11px] font-semibold leading-snug">{{ entry.subject }}</p>
-                            <p class="mt-0.5 text-[10px] opacity-60">{{ fmtTime(entry.start_time) }}–{{ fmtTime(entry.end_time) }}</p>
+                            <p class="mt-0.5 text-[10px] opacity-60 font-medium">{{ fmtTime(entry.start_time) }}–{{ fmtTime(entry.end_time) }}</p>
                             <p v-if="entry.room" class="mt-0.5 truncate text-[10px] opacity-50">{{ entry.room }}</p>
                         </div>
                     </div>

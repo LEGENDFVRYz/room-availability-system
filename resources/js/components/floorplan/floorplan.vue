@@ -924,7 +924,7 @@ onUnmounted(() => {
                 class="fixed inset-0 z-[180] flex items-end justify-center bg-black/40 p-4 sm:items-center"
                 @click.self="closeRoomSheet"
             >
-                <section class="max-h-[calc(100vh-2rem)] w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+                <section class="max-h-[calc(100vh-8rem)] w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl">
                     <header class="flex items-start justify-between gap-4 border-b border-gray-200 bg-gradient-to-r from-pup-maroon to-pup-maroon-deep px-5 py-4 text-white">
                         <div>
                             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-pup-gold-light">Room schedule sheet</p>

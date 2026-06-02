@@ -40,7 +40,7 @@
             margin-bottom: 14px;
             padding: 12px 14px;
             border: 1px solid #e5e7eb;
-            border-left: 6px solid #800000;
+            /* border-left: 6px solid #800000; */
             background: #fff8e1;
         }
 

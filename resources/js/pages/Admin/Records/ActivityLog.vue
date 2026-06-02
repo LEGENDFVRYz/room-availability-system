@@ -116,6 +116,7 @@ const filteredLogs = computed(() => {
                 :filters="filters"
                 :rooms="rooms"
                 :result-count="filteredLogs.length"
+                export-href="/admin/records/activity/export/pdf"
                 @update:filters="filters = $event"
                 @reset="resetFilters"
             />

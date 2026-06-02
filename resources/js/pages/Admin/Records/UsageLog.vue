@@ -205,6 +205,7 @@ const summaryCards = computed(() => [
                 :filters="filters"
                 :rooms="props.rooms"
                 :result-count="filteredLogs.length"
+                export-href="/admin/records/usage/export/pdf"
                 @update:filters="filters = $event"
                 @reset="resetFilters"
             />

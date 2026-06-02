@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import AdminFilterField from '@/components/AdminFilterField.vue';
 import AdminFilterPanel from '@/components/AdminFilterPanel.vue';
+import PdfExportButton from '@/components/PdfExportButton.vue';
 import RoomMultiSelect from '@/components/RoomMultiSelect.vue';
 import { RotateCcw, Search } from 'lucide-vue-next';
 import type { BorrowType, RoomOption, RoomUsageFiltersState } from './type';
@@ -9,6 +10,7 @@ const props = defineProps<{
     filters: RoomUsageFiltersState;
     rooms: RoomOption[];
     resultCount: number;
+    exportHref?: string;
 }>();
 
 const emit = defineEmits<{
@@ -49,14 +51,23 @@ function updateBorrowType(event: Event) {
         :subtitle="`Showing ${resultCount} valid classroom borrowing record${resultCount === 1 ? '' : 's'}.`"
     >
         <template #actions>
-            <button
-                type="button"
-                @click="emit('reset')"
-                class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 text-xs font-bold text-gray-600 transition hover:border-pup-maroon hover:text-pup-maroon"
-            >
-                <RotateCcw class="h-3.5 w-3.5" />
-                Reset filters
-            </button>
+            <div class="flex flex-wrap items-center gap-2">
+                <PdfExportButton
+                    v-if="exportHref"
+                    :href="exportHref"
+                    :filters="filters"
+                    label="Export PDF"
+                />
+
+                <button
+                    type="button"
+                    @click="emit('reset')"
+                    class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 text-xs font-bold text-gray-600 transition hover:border-pup-maroon hover:text-pup-maroon"
+                >
+                    <RotateCcw class="h-3.5 w-3.5" />
+                    Reset filters
+                </button>
+            </div>
         </template>
 
         <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1.4fr_0.85fr_0.85fr_1fr_0.9fr]">
